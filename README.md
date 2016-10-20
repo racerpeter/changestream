@@ -1,4 +1,4 @@
-[![CircleCI](https://circleci.com/gh/mavenlink/change-stream.svg?style=svg)](https://circleci.com/gh/mavenlink/change-stream)
+[![CircleCI](https://circleci.com/gh/mavenlink/changestream.svg?style=svg)](https://circleci.com/gh/mavenlink/changestream)
 
 <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRTURAvcnXp2Fj7Kx83GStK-PbSfOw1rFfxtygMsayJ2I9FUYR-Pg" align="right" />
 # Changestream
