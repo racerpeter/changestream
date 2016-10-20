@@ -45,7 +45,7 @@ class App extends Database with Config {
                         currentRow: Int = 1,
                         sql: Option[String] = None
                       ): Unit = {
-    val event = probe.expectMsgType[String](5 seconds)
+    val event = probe.expectMsgType[String](15 seconds)
     val json = event.parseJson.asJsObject.fields
 
     json("mutation") should equal(JsString(mutation))
