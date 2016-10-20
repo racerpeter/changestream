@@ -1,0 +1,56 @@
+machine:
+  timezone: UTC
+  java:
+    version: oraclejdk8
+  environment:
+    SBT_VERSION: $(cat $CIRCLE_PROJECT_REPONAME/project/build.properties | awk -F'=' '{ print $2 }')
+    SBT_OPTS: "-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
+    MYSQL_USER: "changestream"
+    MYSQL_PASS: "changestreampass"
+    SQS_QUEUE_NAME: "__circle-firehose"
+    SNS_TOPIC_NAME: "__circle-firehose"
+  services:
+    - mysql
+    - docker
+
+dependencies:
+  pre:
+    # Install Correct SBT Version
+    - mkdir -p $HOME/sbt/
+    - wget --no-clobber --output-document=$HOME/sbt/sbt-launch-"$SBT_VERSION.jar" https://repo.typesafe.com/typesafe/ivy-releases/org.scala-sbt/sbt-launch/"$SBT_VERSION"/sbt-launch.jar || true
+    - echo "java $SBT_OPTS -jar $HOME/sbt/sbt-launch-$SBT_VERSION.jar \"\$@\"" > $HOME/bin/sbt
+    - chmod u+x $HOME/bin/sbt
+    -  which sbt
+    - sbt sbt-version
+    # Configure MySQL
+    - mysql -e "CREATE USER 'changestream'@'localhost' IDENTIFIED BY 'changestreampass';GRANT REPLICATION SLAVE ON *.* TO 'changestream'@'localhost';GRANT ALL ON *.* TO 'changestream'@'localhost';" -uroot;
+    - case $CIRCLE_NODE_INDEX in 0) MY_CNF="my.cnf" ;; 1) MY_CNF="my-gtid.cnf" ;; esac; sudo mv src/test/resources/$MY_CNF /etc/my.cnf
+    - sudo service mysql restart
+  cache_directories:
+    - "~/sbt"
+    - "~/.ivy2"
+    - "~/.sbt"
+    - "target/resolution-cache"
+    - "target/streams"
+    - "project/target/resolution-cache"
+    - "project/target/streams"
+test:
+  override:
+    - sbt test:
+        parallel: true
+    - sbt it:test:
+        parallel: true
+  post:
+    - mkdir -p $CIRCLE_TEST_REPORTS/junit/
+    - find . -type f -regex ".*/target/test-reports/.*xml" -exec cp {} $CIRCLE_TEST_REPORTS/junit/ \;
+    - sbt debian:packageBin
+    - sbt docker
+    - mv target/*.deb $CIRCLE_ARTIFACTS/
+    - mv target/docker/Dockerfile $CIRCLE_ARTIFACTS/
+deployment:
+  hub:
+    branch: master
+    commands:
+      - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+      - docker push mavenlink/changestream
+

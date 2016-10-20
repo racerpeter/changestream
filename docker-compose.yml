@@ -1,0 +1,20 @@
+version: '2'
+services:
+  changestream:
+    image: mavenlink/changestream
+    depends_on:
+      - db
+    environment:
+      - MYSQL_HOST=db
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=password
+      - MYSQL_SERVER_ID=456
+  db:
+    image: mysql:5.7
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_USER=root
+      - MYSQL_ROOT_PASSWORD=password
+    volumes:
+      - ./src/test/resources/my.cnf:/etc/mysql/conf.d/mysql.cnf:ro

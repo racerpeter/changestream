@@ -1,0 +1,17 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Test" type="ScalaTestRunConfiguration" factoryName="ScalaTest" singleton="true" show_console_on_std_out="true" show_console_on_std_err="true">
+    <extension name="coverage" enabled="false" merge="false" sample_coverage="true" runner="idea" />
+    <module name="changestream" />
+    <setting name="path" value="changestream.actors.SqsActorSpec" />
+    <setting name="package" value="" />
+    <setting name="vmparams" value="-Xms512M -Xmx1024M -Xss1M -XX:+CMSClassUnloadingEnabled" />
+    <setting name="params" value="" />
+    <setting name="workingDirectory" value="file://$PROJECT_DIR$" />
+    <setting name="searchForTest" value="In single module" />
+    <setting name="testName" value="" />
+    <setting name="testKind" value="All in package" />
+    <setting name="showProgressMessages" value="true" />
+    <envs />
+    <method />
+  </configuration>
+</component>
