@@ -37,6 +37,8 @@ $ docker-compose up
 
 After running `docker-compose up`, you will have access to a mysql instance on localhost port 3306 with a root password of "password", and changestream configured to listen for events.
 
+*Changestream is available on [Docker Hub](https://hub.docker.com/r/mavenlink/changestream/).*
+
 ### The Bespoke Setup
 Changestream requires MySQL, and requires that [row-based replication](https://dev.mysql.com/doc/refman/5.7/en/replication-formats.html)
 be enabled on your host. Here is a barebones configuration that is suitable for development:
