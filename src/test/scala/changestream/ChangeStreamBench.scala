@@ -1,11 +1,14 @@
 package changestream
 
 import akka.actor.Props
+import akka.pattern.ask
 import akka.testkit.TestActorRef
+import akka.util.Timeout
 import changestream.actors._
 import changestream.actors.EncryptorActor.{Ciphertext, Plaintext}
 import changestream.events._
 import changestream.helpers.{BenchBase, Fixtures}
+import com.typesafe.config.ConfigFactory
 import spray.json.{JsNumber, JsObject, JsString}
 
 import scala.concurrent.Await
@@ -35,27 +38,37 @@ object ChangeStreamBench extends BenchBase {
 //  }
 
   performance of "EncryptorActor" in {
-    val actor = getProbedActorOf[EncryptorActor](classOf[EncryptorActor], "changestream.encryptor")
-    def sourceObject(a: String, b: String) = JsObject(
-      "no_encrypt" -> JsString(a),
-      "no_encrypt_hash" -> JsObject("a" -> JsNumber(1), "b" -> JsNumber(2)),
-      "do_encrypt" -> JsString(b),
-      "do_encrypt_hash" -> JsObject("a" -> JsNumber(1), "b" -> JsNumber(2))
+    val config = ConfigFactory.
+      parseString("changestream.encryptor.encrypt-fields = [\"do_encrypt\", \"do_encrypt_hash\", \"parent.do_encrypt_hash\"]").
+      withFallback(testConfig).
+      getConfig("changestream.encryptor")
+    val actor = TestActorRef(Props(classOf[EncryptorActor], config))
+    implicit val TIMEOUT = Timeout(config.getLong("timeout") milliseconds)
+
+    val sourceObject = JsObject(
+      "no_encrypt" -> JsString("a"),
+      "no_encrypt_hash" -> JsObject("aa" -> JsNumber(1), "bb" -> JsNumber(2)),
+      "do_encrypt" -> JsString("b"),
+      "do_encrypt_hash" -> JsObject("aa" -> JsNumber(1), "bb" -> JsNumber(2)),
+      "parent" -> JsObject(
+        "do_encrypt_hash" -> JsObject("aa" -> JsNumber(1), "bb" -> JsNumber(2)),
+        "no_encrypt_hash" -> JsObject("cc" -> JsNumber(3), "dd" -> JsNumber(4))
+      )
     )
-    val CRYPT_FIELDS = Seq("do_encrypt", "do_encrypt_hash")
 
     measure method "encrypt" in {
       (1 to ITERATIONS).foreach({ idx =>
-        actor ! Plaintext(sourceObject(s"hello world ${idx}", s"hello world ${idx}"), CRYPT_FIELDS)
+        Await.result(actor ? Plaintext(sourceObject), 500.milliseconds)
       })
-      probe.receiveN(ITERATIONS)
     }
 
+    val encrypted = Await.result[JsObject](actor ? Plaintext(sourceObject) map {
+      case v: JsObject => v
+    }, 500.milliseconds)
     measure method "decrypt" in {
       (1 to ITERATIONS).foreach({ idx =>
-        actor ! Ciphertext(sourceObject("IqIDXjLEQXDY7DCpRFIWzA==", "IqIDXjLEQXDY7DCpRFIWzA=="), CRYPT_FIELDS)
+        Await.result(actor ? Ciphertext(encrypted), 500.milliseconds)
       })
-      probe.receiveN(ITERATIONS)
     }
   }
 
