@@ -255,7 +255,7 @@ class JsonFormatterActorSpec extends Base with Config {
       crudAllChecksOut(inTransaction = true, 1, 1)
     }
     "for multi-row updates" should {
-      val rowCount = Random.nextInt(10) + 1
+      val rowCount = 10
       val transactionCount = rowCount + Random.nextInt(100)
       crudAllChecksOut(inTransaction = true, rowCount, transactionCount)
     }
@@ -266,7 +266,7 @@ class JsonFormatterActorSpec extends Base with Config {
       crudAllChecksOut(inTransaction = false, 1, 1)
     }
     "for multi-row updates" should {
-      val rowCount = Random.nextInt(10) + 1
+      val rowCount = 10
       val transactionCount = rowCount + Random.nextInt(100)
       crudAllChecksOut(inTransaction = false, rowCount, transactionCount)
     }
