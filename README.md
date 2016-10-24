@@ -48,7 +48,7 @@ be enabled on your host. Here is a barebones configuration that is suitable for 
 [mysqld]
 log-bin=mysql-bin
 binlog_format=row
-binlog_rows_query_log_events # Optional: if you want to obtain the original query associated with the mutation events
+[binlog_rows_query_log_events](https://dev.mysql.com/doc/refman/5.6/en/replication-options-binary-log.html#option_mysqld_binlog-rows-query-log-events) # Optional (MySQL 5.6+ only): to include the original query associated with a mutation event
 server-id=952 # must be different than the same setting in application.conf
 expire_logs_days=1
 ```
