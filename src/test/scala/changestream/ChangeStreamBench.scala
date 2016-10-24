@@ -39,7 +39,7 @@ object ChangeStreamBench extends BenchBase {
 
   performance of "EncryptorActor" in {
     val config = ConfigFactory.
-      parseString("changestream.encryptor.encrypt-fields = [\"do_encrypt\", \"do_encrypt_hash\", \"parent.do_encrypt_hash\"]").
+      parseString("changestream.encryptor.encrypt-fields = \"do_encrypt, do_encrypt_hash,parent.do_encrypt_hash\"").
       withFallback(testConfig).
       getConfig("changestream.encryptor")
     val actor = TestActorRef(Props(classOf[EncryptorActor], config))

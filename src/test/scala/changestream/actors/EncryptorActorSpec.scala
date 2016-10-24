@@ -9,7 +9,7 @@ import spray.json._
 
 class EncryptorActorSpec extends Base with Config {
   val config = ConfigFactory.
-    parseString("changestream.encryptor.encrypt-fields = [\"do_encrypt\", \"do_encrypt_hash\", \"parent.do_encrypt_hash\"]").
+    parseString("changestream.encryptor.encrypt-fields = \"do_encrypt, do_encrypt_hash,parent.do_encrypt_hash\"").
     withFallback(testConfig).
     getConfig("changestream.encryptor")
   val encryptorActor = TestActorRef(Props(classOf[EncryptorActor], config))

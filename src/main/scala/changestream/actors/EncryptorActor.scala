@@ -33,7 +33,7 @@ class EncryptorActor (
   private val encryptEngine = Cipher.getInstance(cipher)
   private val decryptEngine = Cipher.getInstance(cipher)
 
-  private val encryptFields = config.getStringList("encrypt-fields")
+  private val encryptFields = config.getString("encrypt-fields").toLowerCase().split(',').map(_.trim)
 
   override def preStart() = {
     encryptEngine.init(Cipher.ENCRYPT_MODE, originalKey)
