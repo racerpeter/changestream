@@ -1,6 +1,7 @@
 package changestream.helpers
 
 import akka.testkit.TestProbe
+import changestream.events.MutationWithInfo
 import changestream.{ChangeStream, ChangeStreamEventListener}
 import com.typesafe.config.ConfigFactory
 import spray.json._
@@ -45,8 +46,9 @@ class App extends Database with Config {
                         currentRow: Int = 1,
                         sql: Option[String] = None
                       ): Unit = {
-    val event = probe.expectMsgType[String](15 seconds)
-    val json = event.parseJson.asJsObject.fields
+    val message = probe.expectMsgType[MutationWithInfo](15 seconds)
+    message.formattedMessage.isDefined should be(true)
+    val json = message.formattedMessage.get.parseJson.asJsObject.fields
 
     json("mutation") should equal(JsString(mutation))
     json("database") should equal(JsString(database))
@@ -66,7 +68,7 @@ class App extends Database with Config {
 
   def waitAndClear(count: Int = 1) = {
     (1 to count).foreach(idx =>
-      probe.expectMsgType[String](5 seconds)
+      probe.expectMsgType[MutationWithInfo](5 seconds)
     )
   }
 }
