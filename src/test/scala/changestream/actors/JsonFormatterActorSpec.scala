@@ -50,7 +50,11 @@ class JsonFormatterActorSpec extends Base with Config {
 
     val messages = probe.receiveN(eventCount, 5000 milliseconds)
     messages.map({
-      case message: String =>
+      case MutationWithInfo(m, tx, col, Some(message: String)) =>
+        m should be(mutation.mutation)
+        tx should be(mutation.transaction)
+        col should be(mutation.columns)
+
         getJsFields(message.parseJson)
     })
   }
@@ -64,7 +68,11 @@ class JsonFormatterActorSpec extends Base with Config {
 
     val messages = probe.receiveN(eventCount, 5000 milliseconds)
     messages.map({
-      case message: String =>
+      case MutationWithInfo(m, tx, col, Some(message: String)) =>
+        m should be(mutation.mutation)
+        tx should be(mutation.transaction)
+        col should be(mutation.columns)
+
         message.parseJson.asJsObject
     })
   }
