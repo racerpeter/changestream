@@ -3,20 +3,18 @@ package changestream.actors
 import akka.actor.Props
 import akka.testkit.TestActorRef
 import changestream.actors.SqsActor.BatchResult
-import changestream.helpers.{Base, Config}
+import changestream.helpers.{Config, Emitter}
+import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
-class SqsActorSpec extends Base with Config {
+class SqsActorSpec extends Emitter with Config {
   val actorRef = TestActorRef(Props(new SqsActor(awsConfig)))
-
-  val INVALID_MESSAGE = 0
 
   "When SqsActor receives a single valid message" should {
     "Add the message to the SQS queue in a batch of one" in {
-      val jsonString = "{json:true}"
-      actorRef ! jsonString
+      actorRef ! message
 
       val result = expectMsgType[akka.actor.Status.Success](50000 milliseconds)
       result.status shouldBe a[BatchResult]
@@ -27,9 +25,8 @@ class SqsActorSpec extends Base with Config {
 
   "When SqsActor receives multiple valid messages in quick succession" should {
     "Add the messages to the SQS queue in a batch of multiple" in {
-      val jsonString = "{json:true}"
-      actorRef ! jsonString
-      actorRef ! jsonString
+      actorRef ! message
+      actorRef ! message
 
       val result = expectMsgType[akka.actor.Status.Success](5000 milliseconds)
       result.status shouldBe a[BatchResult]
@@ -40,10 +37,9 @@ class SqsActorSpec extends Base with Config {
 
   "When SqsActor receives multiple valid messages in slow succession" should {
     "Add the messages to the SQS queue in multiple batches of one message" in {
-      val jsonString = "{json:true}"
-      actorRef ! jsonString
+      actorRef ! message
       Thread.sleep(500)
-      actorRef ! jsonString
+      actorRef ! message
 
       val result1 = expectMsgType[akka.actor.Status.Success](5000 milliseconds)
       val result2 = expectMsgType[akka.actor.Status.Success](5000 milliseconds)

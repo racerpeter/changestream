@@ -2,20 +2,17 @@ package changestream.actors
 
 import akka.actor.Props
 import akka.testkit.TestActorRef
-import changestream.helpers.{Base, Config}
+import changestream.helpers.{Emitter, Config}
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
-class StdoutActorSpec extends Base with Config {
+class StdoutActorSpec extends Emitter with Config {
   val actorRef = TestActorRef(Props(new StdoutActor(awsConfig)))
-
-  val INVALID_MESSAGE = 0
 
   "When SnsActor receives a single valid message" should {
     "Immediately publish the message to SNS" in {
-      val jsonString = "{json:true}"
-      actorRef ! jsonString
+      actorRef ! message
 
       val result = expectMsgType[akka.actor.Status.Success](50000 milliseconds)
       result.status shouldBe a[String]

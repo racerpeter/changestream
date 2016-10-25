@@ -7,6 +7,7 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Failure, Success}
 import akka.actor.{Actor, ActorRef, Cancellable, OneForOneStrategy}
+import changestream.events.MutationWithInfo
 import com.amazonaws.services.sqs.AmazonSQSAsyncClient
 import com.amazonaws.services.sqs.model.SendMessageBatchResult
 import com.github.dwhjames.awswrap.sqs.AmazonSQSScalaClient
@@ -71,7 +72,7 @@ class SqsActor(config: Config = ConfigFactory.load().getConfig("changestream")) 
   override def postStop() = cancelDelayedFlush
 
   def receive = {
-    case message: String =>
+    case MutationWithInfo(mutation, _, _, Some(message: String)) =>
       log.debug(s"Received message: ${message}")
 
       cancelDelayedFlush

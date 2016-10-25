@@ -128,12 +128,14 @@ class JsonFormatterActor (
         if(encryptData) {
           log.debug(s"Encrypting JSON event and sending to the ${nextHop.path.name} actor")
           val encryptRequest = Plaintext(json)
-          val cipherJson = ask(encryptorActor, encryptRequest).mapTo[JsValue].map(_.prettyPrint)
-          cipherJson pipeTo nextHop
+          ask(encryptorActor, encryptRequest).map {
+            case v: JsValue =>
+              message.copy(formattedMessage = Some(v.prettyPrint))
+          } pipeTo nextHop
         }
         else {
           log.debug(s"Sending JSON event to the ${nextHop.path.name} actor")
-          nextHop ! json.prettyPrint
+          nextHop ! message.copy(formattedMessage = Some(json.prettyPrint))
         }
       })
     }

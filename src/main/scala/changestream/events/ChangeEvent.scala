@@ -154,5 +154,6 @@ case class Column(name: String, dataType: String, isPrimary: Boolean)
 case class MutationWithInfo(
                              mutation: MutationEvent,
                              transaction: Option[TransactionInfo] = None,
-                             columns: Option[ColumnsInfo] = None
+                             columns: Option[ColumnsInfo] = None,
+                             formattedMessage: Option[String] = None
                            )

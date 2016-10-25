@@ -319,29 +319,31 @@ The `MutationWithInfo` container object travels in a fixed path through the syst
 For those familiar with [Akka Streams](http://doc.akka.io/docs/akka/current/scala/stream/stream-introduction.html), the parantheticals should help to show how events move through the actor system. *Also, for those familiar with Akka Streams, please help me migrate Changestream to Akka Streams.*
 
 #### ChangeStreamEventListener.onEvent (Source)
-- Creates/Emits: `MutationWithInfo(MutationEvent, None, None)`
+- Creates/Emits: `MutationWithInfo(MutationEvent, None, None, None)`
 
 #### TransactionActor (Flow)
 - Receives: `MutationWithInfo(MutationEvent, None, None)`
-- Emits: `MutationWithInfo(MutationEvent, TransactionInfo, None)` or `MutationWithInfo(MutationEvent, None, None)` (if there is no transaction)
+- Emits: `MutationWithInfo(MutationEvent, TransactionInfo, None, None)` or `MutationWithInfo(MutationEvent, None, None, None)` (if there is no transaction)
 
 #### ColumnInfoActor (Flow)
-- Receives: `MutationWithInfo(MutationEvent, Option[TransactionInfo], None)`
-- Emits: `MutationWithInfo(MutationEvent, Option[TransactionInfo], ColumnsInfo)`
+- Receives: `MutationWithInfo(MutationEvent, Option[TransactionInfo], None, None)`
+- Emits: `MutationWithInfo(MutationEvent, Option[TransactionInfo], ColumnsInfo, None)`
 
 #### JsonFormatterActor (Flow)
-- Receives: `MutationWithInfo(MutationEvent, Option[TransactionInfo], ColumnsInfo)`
-- Emits: `String`
+- Receives: `MutationWithInfo(MutationEvent, Option[TransactionInfo], ColumnsInfo, None)`
+- Emits: `MutationWithInfo(MutationEvent, Option[TransactionInfo], ColumnsInfo, Some(String))`
 
 ##### EncryptorActor (Flow)
 Optional. The `EncryptorActor` is a child actor of `JsonFormatterActor`, and if enabled, will
 receive the completed `JsObject` and encrypt fields in the object based on the `changestream.encryptor.encrypt-fields` setting.
 
-- Receives: `Plaintext(JsObject, Seq[String])`
+- Receives: `Plaintext(JsObject)`
 - Emits: `JsObject`
 
 #### SnsActor / SqsActor / StdoutActor (Sink)
-- Receives: `String`
+In order to enable features such as string interpolation for the configured topic name, we pass the
+`MutationWithInfo` all the way through the process.
+- Receives: `MutationWithInfo(MutationEvent, Option[TransactionInfo], ColumnsInfo, Some(String))`
 
 
 ## Requirements

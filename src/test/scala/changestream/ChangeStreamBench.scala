@@ -29,9 +29,11 @@ object ChangeStreamBench extends BenchBase {
 //      )
 //    )
 //
+//    val (mutationNoJson, _, _) = Fixtures.mutationWithInfo("insert", 1, 1, false, true, 1)
+//    message = mutationNoJson.copy(formattedMessage = "{json: true}")
 //    measure method "send" in {
 //      (1 to 10).foreach({ idx =>
-//        actor ! "{json: true}"
+//        actor ! message
 //      })
 //      testKit.receiveN(10, 10 seconds)
 //    }

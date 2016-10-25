@@ -2,20 +2,32 @@ package changestream.actors
 
 import akka.actor.Props
 import akka.testkit.TestActorRef
-import changestream.helpers.{Base, Config}
+import changestream.helpers.{Emitter, Config, Fixtures}
+import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
-class SnsActorSpec extends Base with Config {
+class SnsActorSpec extends Emitter with Config {
   val actorRef = TestActorRef(Props(new SnsActor(awsConfig)))
-
-  val INVALID_MESSAGE = 0
 
   "When SnsActor receives a single valid message" should {
     "Immediately publish the message to SNS" in {
-      val jsonString = "{json:true}"
-      actorRef ! jsonString
+      actorRef ! message
+
+      val result = expectMsgType[akka.actor.Status.Success](50000 milliseconds)
+      result.status shouldBe a[String]
+    }
+  }
+
+  "When SnsActor receives a message" should {
+    "Should correctly publish the message when the topic contains interpolated database and/or tableName" in {
+      val configWithInterpolation = ConfigFactory.
+        parseString("aws.sns.topic = \"__integration_tests-{database}-{tableName}\"").
+        withFallback(awsConfig)
+      val snsWithInterpolation = TestActorRef(Props(new SnsActor(configWithInterpolation)))
+
+      snsWithInterpolation ! message
 
       val result = expectMsgType[akka.actor.Status.Success](50000 milliseconds)
       result.status shouldBe a[String]
