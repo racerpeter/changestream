@@ -27,7 +27,6 @@ object Dependencies {
   val testDependencies = Seq(
     "com.typesafe.akka" %% "akka-testkit" % akkaVersion % "it,test,bench",
     "org.scalatest" %% "scalatest" % "3.0.0" % "it,test,bench",
-    "org.scalacheck" %% "scalacheck" % "1.13.2" % "it,test,bench",
     "com.storm-enroute" %% "scalameter" % "0.7" % "it,test,bench"
   )
 }

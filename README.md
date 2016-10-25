@@ -48,7 +48,7 @@ be enabled on your host. Here is a barebones configuration that is suitable for 
 [mysqld]
 log-bin=mysql-bin
 binlog_format=row
-binlog_rows_query_log_events # Optional: if you want to obtain the original query associated with the mutation events
+[binlog_rows_query_log_events](https://dev.mysql.com/doc/refman/5.6/en/replication-options-binary-log.html#option_mysqld_binlog-rows-query-log-events) # Optional (MySQL 5.6+ only): to include the original query associated with a mutation event
 server-id=952 # must be different than the same setting in application.conf
 expire_logs_days=1
 ```
@@ -173,28 +173,43 @@ The `ChangeStreamEventListener` and `ChangeStreamEventDeserializer` handles the 
 
 ### The Actor System
 #### TransactionActor
-The `TransactionActor` is responsible for maintaining state about [MySQL Transactions](http://dev.mysql.com/doc/refman/5.7/en/sql-syntax-transactions.html) that may be in progress, and provides the `JsonFormatterActor` with transaction metadata that can be appended to the JSON payload.
+The `TransactionActor` is responsible for maintaining state about 
+[MySQL Transactions](http://dev.mysql.com/doc/refman/5.7/en/sql-syntax-transactions.html) that may be in progress, and 
+provides the `JsonFormatterActor` with transaction metadata that can be appended to the JSON payload.
 
 #### ColumnInfoActor
-Arguably the most complicated actor in the system, it is responsible for fetching primary key information, column names, and data types from MySQL via a sidechannel (standard MySQL client connection). This information is used by the `JsonFormatterActor` to provide the changed data in a nice human-readable format.
+Arguably the most complicated actor in the system, it is responsible for fetching primary key information, column names, 
+and data types from MySQL via a sidechannel (standard MySQL client connection). This information is used by the 
+`JsonFormatterActor` to provide the changed data in a nice human-readable format.
 
 #### JsonFormatterActor
-The `JsonFormatterActor` is responsible for taking in information from all of the upstream actors, and emitting a JSON formatted string. Encryption can be optionally enabled, in which case the formatted mutation [JsObject](https://github.com/spray/spray-json#usage) is routed through the EncryptorActor before being formatted and sent to the emitter.
+The `JsonFormatterActor` is responsible for taking in information from all of the upstream actors, and emitting a JSON
+formatted string. Encryption can be optionally enabled, in which case the formatted mutation
+[JsObject](https://github.com/spray/spray-json#usage) is routed through the EncryptorActor before being formatted and
+sent to the emitter.
 
 #### EncryptorActor
-The `EncryptionActor` provides optional encryption for the change event payloads. The `Plaintext` message is a case class that accepts a `JsObject` along with a `Seq` of fields to encrypt. Each of these fields is stringified via the `compactPrint` method, encrypted, base64 encoded, and finally wrapped in a `JsString` value. The new `JsObject` with encrypted fields is then returned to `sender()`. *Note: Currently only encryption of top level keys is supported.*
+The `EncryptionActor` provides optional encryption for the change event payloads. The `Plaintext` message is a case
+class that accepts a `JsObject` to encrypt. Each of the fields specified in the `changestream.encryptor.encrypt-fields`
+setting is stringified via the `compactPrint` method, encrypted, base64 encoded, and finally wrapped in a `JsString`
+value. The new `JsObject` with encrypted fields is then returned to `sender()`.
 
 #### SnsActor
-The `SnsActor` manages a connection to Amazon SNS, and emits JSON-formatted change events to a configurable SNS topic. This publisher is ideal if you wish to leverage SNS for [Fan-out](http://docs.aws.amazon.com/sns/latest/dg/SNS_Scenarios.html) to many queues.
+The `SnsActor` manages a connection to Amazon SNS, and emits JSON-formatted change events to a configurable SNS topic. 
+This publisher is ideal if you wish to leverage SNS for 
+[Fan-out](http://docs.aws.amazon.com/sns/latest/dg/SNS_Scenarios.html) to many queues.
 
 #### SqsActor
-The `SqsActor` manages a pool of connections to Amazon SQS, and emits JSON-formatted change events to a configurable SQS queue. This publisher is ideal if you intend to have a single service consuming events from Changestream.
+The `SqsActor` manages a pool of connections to Amazon SQS, and emits JSON-formatted change events to a configurable SQS 
+queue. This publisher is ideal if you intend to have a single service consuming events from Changestream.
 
 #### StdoutActor
-The `StdoutActor` is primarily included for debugging and example purposes, and simply prints the stringified mutation to `STDOUT`. If you intend to create a custom emitter, this could be a good place to start.
+The `StdoutActor` is primarily included for debugging and example purposes, and simply prints the stringified mutation 
+to `STDOUT`. If you intend to create a custom emitter, this could be a good place to start.
 
 #### MyNewProducerActor
-You probably see where this is going. More producer actors are welcome! They couldn't be easier to write, since all the heavy lifting of creating a JSON string is already done!
+You probably see where this is going. More producer actors are welcome! They couldn't be easier to write, since all the 
+heavy lifting of creating a JSON string is already done!
 
 ```
 package changestream.actors
@@ -319,7 +334,8 @@ For those familiar with [Akka Streams](http://doc.akka.io/docs/akka/current/scal
 - Emits: `MutationWithInfo(MutationEvent, Option[TransactionInfo], ColumnsInfo, Some(String))`
 
 ##### EncryptorActor (Flow)
-Optional. The `EncryptorActor` is a child actor of `JsonFormatterActor`, and if enabled, will receive the completed `JsObject` and a `Seq` of top-level fields to be encrypted.
+Optional. The `EncryptorActor` is a child actor of `JsonFormatterActor`, and if enabled, will
+receive the completed `JsObject` and encrypt fields in the object based on the `changestream.encryptor.encrypt-fields` setting.
 
 - Receives: `Plaintext(JsObject)`
 - Emits: `JsObject`

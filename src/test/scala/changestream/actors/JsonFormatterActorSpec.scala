@@ -263,7 +263,7 @@ class JsonFormatterActorSpec extends Base with Config {
       crudAllChecksOut(inTransaction = true, 1, 1)
     }
     "for multi-row updates" should {
-      val rowCount = Random.nextInt(10) + 1
+      val rowCount = 10
       val transactionCount = rowCount + Random.nextInt(100)
       crudAllChecksOut(inTransaction = true, rowCount, transactionCount)
     }
@@ -274,7 +274,7 @@ class JsonFormatterActorSpec extends Base with Config {
       crudAllChecksOut(inTransaction = false, 1, 1)
     }
     "for multi-row updates" should {
-      val rowCount = Random.nextInt(10) + 1
+      val rowCount = 10
       val transactionCount = rowCount + Random.nextInt(100)
       crudAllChecksOut(inTransaction = false, rowCount, transactionCount)
     }
@@ -344,21 +344,20 @@ class JsonFormatterActorSpec extends Base with Config {
 
   "When JsonFormatterActor receives a message with encrypt-data enabled" should {
     "encrypt data" should {
-      val encryptorActor = TestActorRef(Props(classOf[EncryptorActor], testConfig.getConfig("changestream.encryptor")))
-
       val configEncrypt = ConfigFactory
         .parseString("changestream.encryptor.enabled = true")
         .withFallback(testConfig)
         .getConfig("changestream")
-      val actorEncrypt = TestActorRef(Props(classOf[JsonFormatterActor], maker, configEncrypt))
+      val formatAndDecryptActor = TestActorRef(Props(classOf[JsonFormatterActor], maker, configEncrypt))
+      val decryptActor = TestActorRef(Props(classOf[EncryptorActor], configEncrypt.getConfig("encryptor")))
 
       val (validMutation, data, oldData) = Fixtures.mutationWithInfo("update")
-      val json = expectJsonFrom2(validMutation, 1, actorEncrypt).head
+      val json = expectJsonFrom2(validMutation, 1, formatAndDecryptActor).head
 
       json.fields("row_data").isInstanceOf[JsString] should be(true)
       json.fields("old_row_data").isInstanceOf[JsString] should be(true)
 
-      val decryptJson = Await.result(encryptorActor ? Ciphertext(json, Seq("row_data", "old_row_data")), 3000 milliseconds) match {
+      val decryptJson = Await.result(decryptActor ? Ciphertext(json), 3000 milliseconds) match {
         case json: JsValue => json
       }
 
