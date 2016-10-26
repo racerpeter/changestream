@@ -36,6 +36,8 @@ object ChangestreamEventDeserializer extends {
     _nextSequenceNumber += rowsInMutation
     next
   }
+
+  def getCurrentSequenceNumber = _nextSequenceNumber
 }
 
 class InsertDeserializer(

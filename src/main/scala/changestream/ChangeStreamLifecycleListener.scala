@@ -12,7 +12,7 @@ object ChangeStreamLifecycleListener extends LifecycleListener {
   }
 
   def onDisconnect(client: BinaryLogClient) = {
-    log.info(s"MySQL client disconnected. Reconnecting...")
+    log.info(s"MySQL binlog client was disconnected.")
   }
 
   def onEventDeserializationFailure(client: BinaryLogClient, ex: Exception) = {
