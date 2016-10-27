@@ -4,6 +4,7 @@ object Dependencies {
   // Versions
   lazy val akkaVersion = "2.4.10"
   lazy val awsVersion = "1.11.39"
+  lazy val sprayVersion = "1.3.3"
 
   val libraryDependencies = Seq(
     // application
@@ -13,6 +14,9 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,
     "com.typesafe.akka" %% "akka-agent" % akkaVersion,
     "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
+    // spray for http control server
+    "io.spray" %% "spray-can" % sprayVersion,
+    "io.spray" %% "spray-routing" % sprayVersion,
     // mysql
     "com.github.shyiko" % "mysql-binlog-connector-java" % "0.5.1",
     "com.github.mauricio" %% "mysql-async" % "0.2.20",
@@ -26,6 +30,7 @@ object Dependencies {
 
   val testDependencies = Seq(
     "com.typesafe.akka" %% "akka-testkit" % akkaVersion % "it,test,bench",
+    "io.spray" %% "spray-testkit" % sprayVersion % "it,test,bench",
     "org.scalatest" %% "scalatest" % "3.0.0" % "it,test,bench",
     "com.storm-enroute" %% "scalameter" % "0.7" % "it,test,bench"
   )

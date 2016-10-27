@@ -26,6 +26,7 @@ class App extends Database with Config {
     initialize
     ConfigFactory.invalidateCaches()
     app.start()
+    Thread.sleep(5000)
 
     super.beforeAll()
   }
