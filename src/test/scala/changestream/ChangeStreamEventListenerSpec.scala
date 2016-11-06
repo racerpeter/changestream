@@ -129,7 +129,7 @@ class ChangeStreamEventListenerSpec extends Base with Config {
   "When a white/black list is enabled" should {
     "include tables on the whitelist" in {
       val whitelistConfig = ConfigFactory
-        .parseString("changestream.whitelist = [\"changestream_test.users\"]")
+        .parseString("changestream.whitelist = \"changestream_test.users\"")
         .withFallback(testConfig)
         .getConfig("changestream")
 
@@ -147,7 +147,7 @@ class ChangeStreamEventListenerSpec extends Base with Config {
 
     "and exclude those on the blacklist" in {
       val blacklistConfig = ConfigFactory
-        .parseString("changestream.blacklist = [\"changestream_test.users\"]")
+        .parseString("changestream.blacklist = \"changestream_test.users,blah.not_important\"")
         .withFallback(testConfig)
         .getConfig("changestream")
 

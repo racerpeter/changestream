@@ -35,11 +35,11 @@ object ChangeStreamEventListener extends EventListener {
     blacklist.clear()
 
     if(config.hasPath("whitelist")) {
-      whitelist.addAll(config.getStringList("whitelist"))
+      config.getString("whitelist").split(',').foreach(whitelist.add(_))
       log.info(s"Using event whitelist: ${whitelist}")
     }
     else if(config.hasPath("blacklist")) {
-      blacklist.addAll(config.getStringList("blacklist"))
+      config.getString("blacklist").split(',').foreach(blacklist.add(_))
       log.info(s"Using event blacklist: ${blacklist}")
     }
 
