@@ -75,6 +75,7 @@ must have SELECT permissions on all user databases and tables.
 
 ```
 CREATE USER 'changestream'@'%.mydomain.com' IDENTIFIED BY 'changestreampass';
+GRANT REPLICATION CLIENT ON *.* TO 'changestream'@'%.mydomain.com';
 GRANT REPLICATION SLAVE ON *.* TO 'changestream'@'%.mydomain.com';
 GRANT SELECT ON *.* TO 'changestream'@'%.mydomain.com';
 ```
