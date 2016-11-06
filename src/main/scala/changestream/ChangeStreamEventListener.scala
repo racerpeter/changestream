@@ -35,11 +35,11 @@ object ChangeStreamEventListener extends EventListener {
     blacklist.clear()
 
     if(config.hasPath("whitelist")) {
-      whitelist.addAll(config.getStringList("whitelist"))
+      config.getString("whitelist").split(',').foreach(whitelist.add(_))
       log.info(s"Using event whitelist: ${whitelist}")
     }
     else if(config.hasPath("blacklist")) {
-      blacklist.addAll(config.getStringList("blacklist"))
+      config.getString("blacklist").split(',').foreach(blacklist.add(_))
       log.info(s"Using event blacklist: ${blacklist}")
     }
 
@@ -112,16 +112,14 @@ object ChangeStreamEventListener extends EventListener {
         val data = event.getData[FormatDescriptionEventData]
         log.info(s"Server version: ${data.getServerVersion}, binlog version: ${data.getBinlogVersion}")
         None
-      case PREVIOUS_GTIDS =>
-        None
-      case ROTATE =>
-        None
-      case ROWS_QUERY =>
-        None
-      case TABLE_MAP =>
-        None
-      case ANONYMOUS_GTID =>
-        None
+
+      // Known events that are safe to ignore
+      case PREVIOUS_GTIDS => None
+      case ROTATE => None
+      case ROWS_QUERY => None
+      case TABLE_MAP => None
+      case ANONYMOUS_GTID => None
+      case STOP => None
 
       case _ =>
         val message = s"Received unknown message: ${event}"

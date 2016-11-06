@@ -23,6 +23,12 @@ class ChangeStreamEventListenerSpec extends Base with Config {
 
       ChangeStreamEventListener.onEvent(rotate)
     }
+    "Should not crash when receiving a STOP event" in {
+      header.setEventType(EventType.STOP)
+      val stop = new Event(header, null)
+
+      ChangeStreamEventListener.onEvent(stop)
+    }
     "Should not crash when receiving a FORMAT_DESCRIPTION event" in {
       header.setEventType(EventType.FORMAT_DESCRIPTION)
       val rotate = new Event(header, new FormatDescriptionEventData())
@@ -129,7 +135,7 @@ class ChangeStreamEventListenerSpec extends Base with Config {
   "When a white/black list is enabled" should {
     "include tables on the whitelist" in {
       val whitelistConfig = ConfigFactory
-        .parseString("changestream.whitelist = [\"changestream_test.users\"]")
+        .parseString("changestream.whitelist = \"changestream_test.users\"")
         .withFallback(testConfig)
         .getConfig("changestream")
 
@@ -147,7 +153,7 @@ class ChangeStreamEventListenerSpec extends Base with Config {
 
     "and exclude those on the blacklist" in {
       val blacklistConfig = ConfigFactory
-        .parseString("changestream.blacklist = [\"changestream_test.users\"]")
+        .parseString("changestream.blacklist = \"changestream_test.users,blah.not_important\"")
         .withFallback(testConfig)
         .getConfig("changestream")
 
