@@ -23,6 +23,12 @@ class ChangeStreamEventListenerSpec extends Base with Config {
 
       ChangeStreamEventListener.onEvent(rotate)
     }
+    "Should not crash when receiving a STOP event" in {
+      header.setEventType(EventType.STOP)
+      val stop = new Event(header, null)
+
+      ChangeStreamEventListener.onEvent(stop)
+    }
     "Should not crash when receiving a FORMAT_DESCRIPTION event" in {
       header.setEventType(EventType.FORMAT_DESCRIPTION)
       val rotate = new Event(header, new FormatDescriptionEventData())
