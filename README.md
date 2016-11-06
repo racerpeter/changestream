@@ -366,7 +366,15 @@ In order to run tests locally you need to configure `test.conf` with a working M
 Make sure that your test user has permissions to create and drop databases and tables. By default, Changestream uses the `changestream_test` table for tests.
 
 ### AWS Test Config
-To run the integration tests, as well as the unit tests on the `SqsActor` and `SnsActor`, you also need to ensure that you have configured your AWS tokens to be available from the environment, and that your AWS tokens have access to create and add messages to queues (SQS) and create and publish to topics (SNS).
+To run the integration tests, as well as the unit tests on the `SqsActor` and `SnsActor`, you also need to ensure that you have configured your
+AWS tokens to be available from the environment, and that your AWS tokens have access to create and add messages to queues (SQS) and create and
+publish to topics (SNS).
+
+```
+AWS_ACCESS_KEY_ID=<access_key_id>
+AWS_SECRET_ACCESS_KEY=<secret_access_key>
+AWS_REGION=<your_region>
+```
 
 ### Running Tests / IDE
 Once that's all set up, you can either run
