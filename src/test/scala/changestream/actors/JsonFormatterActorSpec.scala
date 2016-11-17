@@ -216,7 +216,11 @@ class JsonFormatterActorSpec extends Base with Config {
     }
   }
 
-  def jsonChecksOut(inTransaction: Boolean, json: Map[String, JsValue], sql: String, columns: ColumnsInfo, rowData: ListMap[String, Any]) = {
+  def jsonChecksOut(inTransaction: Boolean, json: Map[String, JsValue], mutation: MutationWithInfo, rowData: ListMap[String, Any]) = {
+    val sql = mutation.mutation.sql.get
+    val columns = mutation.columns.get
+    val timestamp = mutation.mutation.timestamp
+
     if(inTransaction) {
       haveValidTransactionInfo(json)
     }
@@ -227,7 +231,7 @@ class JsonFormatterActorSpec extends Base with Config {
       case Column(name, _, true) => name
     })
     haveValidPrimaryKey(json, rowData.filterKeys(pkFields.contains(_)))
-    haveValidMetadata(json, database, tableName, sql, Fixtures.timestamp)
+    haveValidMetadata(json, database, tableName, sql, timestamp)
     val jsonData = getJsFields(json("row_data"))
     haveValidData(jsonData, rowData)
   }
@@ -251,7 +255,7 @@ class JsonFormatterActorSpec extends Base with Config {
                 beValidDelete(json)
               }
 
-              jsonChecksOut(inTransaction, json, mutation.mutation.sql.get, mutation.columns.get, rowData(idx))
+              jsonChecksOut(inTransaction, json, mutation, rowData(idx))
             }
         })
       }
