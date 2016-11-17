@@ -9,7 +9,6 @@ import scala.collection.immutable.ListMap
 import scala.util.Random
 
 object Fixtures {
-  val timestamp = 1476399833000L
   val columns = IndexedSeq(
     Column("id", "int", true),
     Column("username", "varchar", false),
@@ -25,6 +24,8 @@ object Fixtures {
     Column("java_sql_timestamp", "timestamp", false),
     Column("blob_that_should_be_ignored", "blob", false)
   )
+
+  def timestamp: Long = System.currentTimeMillis
 
   def getColumnsInfo(database: String, tableName: String) = {
     ColumnsInfo(0, database, tableName, columns)
