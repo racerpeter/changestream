@@ -52,17 +52,19 @@ class App extends Database with Config {
     val json = message.formattedMessage.get.parseJson.asJsObject.fields
 
     json("mutation") should equal(JsString(mutation))
+    json should contain key ("sequence")
     json("database") should equal(JsString(database))
     json("table") should equal(JsString(table))
-    json("query").asJsObject.fields("row_count") should equal(JsNumber(queryRowCount))
     if(transactionRowCount > 1) {
       json("transaction").asJsObject.fields("row_count") should equal(JsNumber(transactionRowCount))
     }
-    json("primary_key").asJsObject.fields.keys should contain(primaryKeyField)
+    json("query").asJsObject.fields("timestamp").asInstanceOf[JsNumber].value.toLong.compareTo(Fixtures.timestamp - 60000) should be(1)
+    json("query").asJsObject.fields("row_count") should equal(JsNumber(queryRowCount))
     json("query").asJsObject.fields("current_row") should equal(JsNumber(currentRow))
     if(sql != None) {
       json("query").asJsObject.fields("sql") should equal(JsString(sql.get.trim))
     }
+    json("primary_key").asJsObject.fields.keys should contain(primaryKeyField)
   }
 
   def validateNoEvents = probe.expectNoMsg(5 seconds)

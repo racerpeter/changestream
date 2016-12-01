@@ -131,13 +131,13 @@ object ChangeStreamEventListener extends EventListener {
   protected def getMutationEvent(event: Event, header: EventHeaderV4): Option[MutationEvent] = {
     val mutation = header.getEventType match {
       case e if EventType.isWrite(e) =>
-        event.getData[Insert]
+        event.getData[Insert].copy(timestamp = header.getTimestamp)
 
       case e if EventType.isUpdate(e) =>
-        event.getData[Update]
+        event.getData[Update].copy(timestamp = header.getTimestamp)
 
       case e if EventType.isDelete(e) =>
-        event.getData[Delete]
+        event.getData[Delete].copy(timestamp = header.getTimestamp)
     }
 
     shouldIgnore(mutation) match {
