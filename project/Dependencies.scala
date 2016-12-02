@@ -2,14 +2,14 @@ import sbt._
 
 object Dependencies {
   // Versions
-  lazy val akkaVersion = "2.4.10"
-  lazy val awsVersion = "1.11.39"
+  lazy val akkaVersion = "2.4.14"
+  lazy val awsVersion = "1.11.61"
   lazy val sprayVersion = "1.3.3"
 
   val libraryDependencies = Seq(
     // application
     "ch.qos.logback" % "logback-classic" % "1.1.7",
-    "com.typesafe" % "config" % "1.3.0",
+    "com.typesafe" % "config" % "1.3.1",
     // akka actor system
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,
     "com.typesafe.akka" %% "akka-agent" % akkaVersion,
@@ -18,7 +18,7 @@ object Dependencies {
     "io.spray" %% "spray-can" % sprayVersion,
     "io.spray" %% "spray-routing" % sprayVersion,
     // mysql
-    "com.github.shyiko" % "mysql-binlog-connector-java" % "0.5.1",
+    "com.github.shyiko" % "mysql-binlog-connector-java" % "0.6.0",
     "com.github.mauricio" %% "mysql-async" % "0.2.20",
     // json formatter
     "io.spray" %%  "spray-json" % "1.3.2",
@@ -31,7 +31,7 @@ object Dependencies {
   val testDependencies = Seq(
     "com.typesafe.akka" %% "akka-testkit" % akkaVersion % "it,test,bench",
     "io.spray" %% "spray-testkit" % sprayVersion % "it,test,bench",
-    "org.scalatest" %% "scalatest" % "3.0.0" % "it,test,bench",
+    "org.scalatest" %% "scalatest" % "3.0.1" % "it,test,bench",
     "com.storm-enroute" %% "scalameter" % "0.7" % "it,test,bench"
   )
 }
