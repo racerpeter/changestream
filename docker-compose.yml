@@ -2,6 +2,8 @@ version: '2'
 services:
   changestream:
     image: mavenlink/changestream
+    ports:
+      - "9521:9521"
     depends_on:
       - db
     environment:
