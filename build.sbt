@@ -28,7 +28,8 @@ lazy val changestream = (project in file(".")).
     exportJars := true,
     debianPackageDependencies in Debian ++= Seq("oraclejdk"),
     mappings in Universal += {
-      ((resourceDirectory in Compile).value / "application.conf") -> "conf/application.conf"
+      ((resourceDirectory in Compile).value / "application.conf") -> "conf/application.conf",
+      ((resourceDirectory in Compile).value / "logback.xml") -> "conf/logback.xml"
     },
     // docker settings
     dockerfile in docker := {
