@@ -63,7 +63,7 @@ object ChangeStream extends App {
       terminateActorSystemAndWait
       System.exit(2)
   }
-  Await.result(controlFuture, 20000 milliseconds)
+  Await.result(controlFuture, 5000 milliseconds)
 
   /** Every changestream instance must have a unique server-id.
     *
