@@ -109,10 +109,10 @@ case class Delete(
 
 /** Container for information about a mutation's transaction.
   *
-  * @param guid The unique identifier for the transaction
+  * @param gtid The unique identifier for the transaction
   * @param rowCount The number of rows affected by this transaction
   */
-case class TransactionInfo(guid: String, rowCount: Long)
+case class TransactionInfo(gtid: String, rowCount: Long, lastMutationInTransaction: Boolean = false)
 
 /** Container for a table's column information.
   *

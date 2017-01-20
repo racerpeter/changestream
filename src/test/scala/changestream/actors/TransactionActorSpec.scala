@@ -12,69 +12,103 @@ class TransactionActorSpec extends Base {
   val transactionActor = TestActorRef(Props(classOf[TransactionActor], maker))
 
   val GUID_LENGTH = 36
-  val (mutation, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 2, transactionInfo = false, columns = false)
+  val (mutationNoTransaction, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionInfo = false, columns = false)
+  val (mutationFirstOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, rowInTransaction = 1, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
+  val (mutationNextOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, rowInTransaction = 2, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
+  val (mutationLastOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, rowInTransaction = 3, transactionInfo = true, isLastChangeInTransaction = true, columns = false)
+  val mutationFirstInput = mutationFirstOutput.copy(transaction = None)
+  val mutationNextInput = mutationNextOutput.copy(transaction = None)
+  val mutationLastInput = mutationLastOutput.copy(transaction = None)
   val gtid = "9fc4cdc0-8f3b-11e6-a5b1-e39f73659fee:24"
 
+  def expectMessageFuzzyGuidMatch(mutation: MutationWithInfo) = {
+    val msg = probe.expectMsgType[MutationWithInfo]
+    val expectObj = mutation.copy(transaction = mutation.transaction.map(info => info.copy(gtid = msg.transaction.get.gtid)))
+    msg should be(expectObj)
+  }
 
-  def expectValidTransactionActorOutput(mutation: MutationEvent, rowCount: Long = 1, guid: Option[String] = None) = {
-    val event = probe.expectMsgType[MutationWithInfo]
-    inside(event) {
-      case MutationWithInfo(m, Some(transactionInfo), _, _) =>
-        m should be(mutation)
-        transactionInfo.guid.length should not be(0)
-        guid.foreach(transactionInfo.guid should be(_))
-        transactionInfo.rowCount should be(rowCount)
-    }
+  after {
+    transactionActor ! RollbackTransaction
   }
 
   "When receiving a TransactionEvent" should {
-    "expect inTransaction to be true when we are in a transaction" in {
-      transactionActor ! BeginTransaction
+    "when not in a transaction, we should get an event right away" in {
+      transactionActor ! mutationNoTransaction
 
-      transactionActor ! mutation
-      probe.expectNoMsg
-
-      transactionActor ! CommitTransaction
-
-      expectValidTransactionActorOutput(mutation.mutation, 2)
+      probe.expectMsg[MutationWithInfo](mutationNoTransaction)
     }
 
-    "expect inTransaction to be false when we are not in a transaction" in {
-      transactionActor ! mutation
+    "when we are in a transaction" should {
+      "buffer the first change that arrives" in {
+        transactionActor ! BeginTransaction
 
-      probe.expectMsg[MutationWithInfo](mutation)
+        transactionActor ! mutationFirstInput
+        probe.expectNoMsg
+      }
+
+      "when receiving a subsequent event should emit previous event" in {
+        transactionActor ! BeginTransaction
+
+        transactionActor ! mutationFirstInput
+
+        transactionActor ! mutationNextInput
+        expectMessageFuzzyGuidMatch(mutationFirstOutput)
+
+        transactionActor ! mutationLastInput
+        expectMessageFuzzyGuidMatch(mutationNextOutput)
+      }
+
+      "when committing a transaction should emit last event with correct flag" in {
+        transactionActor ! BeginTransaction
+
+        transactionActor ! mutationFirstInput
+        transactionActor ! mutationNextInput
+        transactionActor ! mutationLastInput
+        probe.receiveN(2)
+
+        transactionActor ! CommitTransaction
+        expectMessageFuzzyGuidMatch(mutationLastOutput)
+      }
     }
 
-    "expect inTransaction to be false after a rollback" in {
+    "not be in a transaction state after a rollback" in {
       transactionActor ! BeginTransaction
+      transactionActor ! mutationFirstInput
       transactionActor ! RollbackTransaction
       expectNoMsg
 
-      transactionActor ! mutation
-
-      probe.expectMsg[MutationWithInfo](mutation)
+      transactionActor ! mutationNextInput
+      expectMessageFuzzyGuidMatch(mutationNextInput)
     }
 
-    "expect inTransaction to be false after a commit" in {
+    "not be in a transaction state after a commit" in {
       transactionActor ! BeginTransaction
+      transactionActor ! mutationFirstInput
       transactionActor ! CommitTransaction
-      expectNoMsg
+      probe.receiveN(1)
 
-      transactionActor ! mutation
-
-      probe.expectMsg[MutationWithInfo](mutation)
+      transactionActor ! mutationNextInput
+      expectMessageFuzzyGuidMatch(mutationNextInput)
     }
 
     "expect the same transaction id for mutations in the same transaction" in {
       transactionActor ! BeginTransaction
 
-      transactionActor ! mutation
-      transactionActor ! mutation
+      transactionActor ! mutationFirstInput
+      transactionActor ! mutationNextInput
 
       transactionActor ! CommitTransaction
 
-      expectValidTransactionActorOutput(mutation.mutation, 4)
-      expectValidTransactionActorOutput(mutation.mutation, 4)
+      val m1 = probe.expectMsgType[MutationWithInfo]
+      val m2 = probe.expectMsgType[MutationWithInfo]
+      inside(m1.transaction) { case Some(info1) =>
+        inside(m2.transaction) { case Some(info2) =>
+          info1.gtid should be(info2.gtid)
+          info1.rowCount should be(info2.rowCount - 1)
+          info1.lastMutationInTransaction should be(false)
+          info2.lastMutationInTransaction should be(true)
+        }
+      }
     }
 
     "When receiving a GtidEvent event" should {
@@ -82,12 +116,13 @@ class TransactionActorSpec extends Base {
         transactionActor ! BeginTransaction
         transactionActor ! Gtid(gtid)
 
-        transactionActor ! mutation
-        probe.expectNoMsg
-
+        transactionActor ! mutationFirstInput
         transactionActor ! CommitTransaction
 
-        expectValidTransactionActorOutput(mutation.mutation, 2, Some(gtid))
+        inside(probe.expectMsgType[MutationWithInfo].transaction) {
+          case Some(info) =>
+            info.gtid should be(gtid)
+        }
       }
     }
   }

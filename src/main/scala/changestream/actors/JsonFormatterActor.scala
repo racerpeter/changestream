@@ -177,7 +177,7 @@ class JsonFormatterActor (
     message.transaction match {
       case Some(txn) => ListMap(
         "transaction" -> JsObject(
-          "id" -> txn.guid.toJson,
+          "id" -> txn.gtid.toJson,
           "row_count" -> txn.rowCount.toJson
         )
       )

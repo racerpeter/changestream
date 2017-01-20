@@ -97,7 +97,7 @@ object Fixtures {
   def mutation(
                 mutationType: String,
                 rowCount: Int = 1,
-                rowsInTransaction: Int = 1,
+                rowInTransaction: Int = 1,
                 sequenceNext: Long = 0,
                 database: String = "changestream_test",
                 tableName: String = "users",
@@ -145,28 +145,40 @@ object Fixtures {
     }).toArray
   }
 
-  def transactionInfo(rowCount: Int = 1) =
-    TransactionInfo(java.util.UUID.randomUUID().toString, rowCount)
-  def transactionInfoGtid(rowCount: Int = 1) =
-    TransactionInfo(s"${java.util.UUID.randomUUID().toString}:${Random.nextInt(100000)}", rowCount)
-  def transactionInfoEither(rowCount: Int = 1) = Random.nextInt(2) match { case 0 => transactionInfo(rowCount) case 1 => transactionInfoGtid(rowCount) }
+  def transactionInfo(rowInTransaction: Int = 1, isLastChangeInTransaction: Boolean = false) =
+    TransactionInfo(
+      java.util.UUID.randomUUID().toString,
+      rowInTransaction,
+      isLastChangeInTransaction
+    )
+  def transactionInfoGtid(rowInTransaction: Int = 1, isLastChangeInTransaction: Boolean = false) =
+    TransactionInfo(
+      s"${java.util.UUID.randomUUID().toString}:${Random.nextInt(100000)}",
+      rowInTransaction,
+      isLastChangeInTransaction
+    )
+  def transactionInfoEither(rowInTransaction: Int = 1, isLastChangeInTransaction: Boolean = false) = Random.nextInt(2) match {
+    case 0 => transactionInfo(rowInTransaction, isLastChangeInTransaction)
+    case 1 => transactionInfoGtid(rowInTransaction, isLastChangeInTransaction)
+  }
 
   def mutationWithInfo(
                         mutationType: String,
                         rowCount: Int = 1,
-                        rowsInTransaction: Int = 1,
+                        rowInTransaction: Int = 1,
                         transactionInfo: Boolean = true,
                         columns: Boolean = true,
                         sequenceNext: Long = 0,
                         database: String = "changestream_test",
                         tableName: String = "users",
-                        tableId: Int = 123
+                        tableId: Int = 123,
+                        isLastChangeInTransaction: Boolean = false
                       ): (MutationWithInfo, Seq[ListMap[String, Any]], Seq[ListMap[String, Any]]) = {
-    val (m, d, od) = mutation(mutationType, rowCount, rowsInTransaction, sequenceNext, database, tableName, tableId)
+    val (m, d, od) = mutation(mutationType, rowCount, rowInTransaction, sequenceNext, database, tableName, tableId)
     (MutationWithInfo(
       m,
       transaction = transactionInfo match {
-        case true => Some(transactionInfoEither(rowsInTransaction))
+        case true => Some(transactionInfoEither(rowInTransaction, isLastChangeInTransaction))
         case false => None
       },
       columns = columns match {
