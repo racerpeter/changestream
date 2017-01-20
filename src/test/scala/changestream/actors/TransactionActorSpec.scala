@@ -13,9 +13,9 @@ class TransactionActorSpec extends Base {
 
   val GUID_LENGTH = 36
   val (mutationNoTransaction, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionInfo = false, columns = false)
-  val (mutationFirstOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, rowInTransaction = 1, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
-  val (mutationNextOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, rowInTransaction = 2, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
-  val (mutationLastOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, rowInTransaction = 3, transactionInfo = true, isLastChangeInTransaction = true, columns = false)
+  val (mutationFirstOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, rowsInTransaction = 1, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
+  val (mutationNextOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, rowsInTransaction = 2, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
+  val (mutationLastOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, rowsInTransaction = 3, transactionInfo = true, isLastChangeInTransaction = true, columns = false)
   val mutationFirstInput = mutationFirstOutput.copy(transaction = None)
   val mutationNextInput = mutationNextOutput.copy(transaction = None)
   val mutationLastInput = mutationLastOutput.copy(transaction = None)
@@ -25,10 +25,6 @@ class TransactionActorSpec extends Base {
     val msg = probe.expectMsgType[MutationWithInfo]
     val expectObj = mutation.copy(transaction = mutation.transaction.map(info => info.copy(gtid = msg.transaction.get.gtid)))
     msg should be(expectObj)
-  }
-
-  after {
-    transactionActor ! RollbackTransaction
   }
 
   "When receiving a TransactionEvent" should {
@@ -104,7 +100,8 @@ class TransactionActorSpec extends Base {
       inside(m1.transaction) { case Some(info1) =>
         inside(m2.transaction) { case Some(info2) =>
           info1.gtid should be(info2.gtid)
-          info1.rowCount should be(info2.rowCount - 1)
+          info1.rowCount should be(0)
+          info2.rowCount should be(2)
           info1.lastMutationInTransaction should be(false)
           info2.lastMutationInTransaction should be(true)
         }

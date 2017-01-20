@@ -97,7 +97,7 @@ object Fixtures {
   def mutation(
                 mutationType: String,
                 rowCount: Int = 1,
-                rowInTransaction: Int = 1,
+                rowsInTransaction: Int = 1,
                 sequenceNext: Long = 0,
                 database: String = "changestream_test",
                 tableName: String = "users",
@@ -145,27 +145,27 @@ object Fixtures {
     }).toArray
   }
 
-  def transactionInfo(rowInTransaction: Int = 1, isLastChangeInTransaction: Boolean = false) =
+  def transactionInfo(rowsInTransaction: Int = 1, isLastChangeInTransaction: Boolean = false) =
     TransactionInfo(
       java.util.UUID.randomUUID().toString,
-      rowInTransaction,
+      isLastChangeInTransaction match { case true => rowsInTransaction case false => 0 },
       isLastChangeInTransaction
     )
-  def transactionInfoGtid(rowInTransaction: Int = 1, isLastChangeInTransaction: Boolean = false) =
+  def transactionInfoGtid(rowsInTransaction: Int = 1, isLastChangeInTransaction: Boolean = false) =
     TransactionInfo(
       s"${java.util.UUID.randomUUID().toString}:${Random.nextInt(100000)}",
-      rowInTransaction,
+      isLastChangeInTransaction match { case true => rowsInTransaction case false => 0 },
       isLastChangeInTransaction
     )
-  def transactionInfoEither(rowInTransaction: Int = 1, isLastChangeInTransaction: Boolean = false) = Random.nextInt(2) match {
-    case 0 => transactionInfo(rowInTransaction, isLastChangeInTransaction)
-    case 1 => transactionInfoGtid(rowInTransaction, isLastChangeInTransaction)
+  def transactionInfoEither(rowsInTransaction: Int = 1, isLastChangeInTransaction: Boolean = false) = Random.nextInt(2) match {
+    case 0 => transactionInfo(rowsInTransaction, isLastChangeInTransaction)
+    case 1 => transactionInfoGtid(rowsInTransaction, isLastChangeInTransaction)
   }
 
   def mutationWithInfo(
                         mutationType: String,
                         rowCount: Int = 1,
-                        rowInTransaction: Int = 1,
+                        rowsInTransaction: Int = 1,
                         transactionInfo: Boolean = true,
                         columns: Boolean = true,
                         sequenceNext: Long = 0,
@@ -174,11 +174,11 @@ object Fixtures {
                         tableId: Int = 123,
                         isLastChangeInTransaction: Boolean = false
                       ): (MutationWithInfo, Seq[ListMap[String, Any]], Seq[ListMap[String, Any]]) = {
-    val (m, d, od) = mutation(mutationType, rowCount, rowInTransaction, sequenceNext, database, tableName, tableId)
+    val (m, d, od) = mutation(mutationType, rowCount, rowsInTransaction, sequenceNext, database, tableName, tableId)
     (MutationWithInfo(
       m,
       transaction = transactionInfo match {
-        case true => Some(transactionInfoEither(rowInTransaction, isLastChangeInTransaction))
+        case true => Some(transactionInfoEither(rowsInTransaction, isLastChangeInTransaction))
         case false => None
       },
       columns = columns match {

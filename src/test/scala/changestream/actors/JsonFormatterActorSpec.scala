@@ -108,19 +108,19 @@ class JsonFormatterActorSpec extends Base with Config {
       txJson("id").toString(jsStringPrinter) should fullyMatch regex "(?i)([0-9a-fA-F]){8}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){12}(:\\d+)?"
     }
 
-    "have valid transaction row_count" in {
-      json should contain key "transaction"
-      val txJson = getJsFields(json("transaction"))
-      val rowCountCheck = txJson("row_count") match {
-        case JsNumber(num) if (num >= 1) =>
-          "valid number"
-        case _ =>
-          "invalid"
-      }
-      rowCountCheck should be("valid number")
-    }
-
     if(isLastMutationInTransaction) {
+      "have valid transaction row_count" in {
+        json should contain key "transaction"
+        val txJson = getJsFields(json("transaction"))
+        val rowCountCheck = txJson("row_count") match {
+          case JsNumber(num) if (num >= 1) =>
+            "valid number"
+          case _ =>
+            "invalid"
+        }
+        rowCountCheck should be("valid number")
+      }
+
       "have the last mutation flag" in {
         val txJson = getJsFields(json("transaction"))
         txJson should contain key "last_mutation"
@@ -135,6 +135,9 @@ class JsonFormatterActorSpec extends Base with Config {
       }
     }
     else {
+      "not have the row_count flag" in {
+        getJsFields(json("transaction")) shouldNot contain key "row_count"
+      }
       "not have the last mutation flag" in {
         getJsFields(json("transaction")) shouldNot contain key "last_mutation"
       }
@@ -292,7 +295,7 @@ class JsonFormatterActorSpec extends Base with Config {
       crudAllChecksOut(inTransaction = true, rowCount, transactionCount)
     }
     "for the last mutation in a transaction" should {
-      crudAllChecksOut(inTransaction = true, rowCount = 3, transactionRowCount = 3, isLastMutationInTransaction = true)
+      crudAllChecksOut(inTransaction = true, rowCount = 1, transactionRowCount = 1, isLastMutationInTransaction = true)
     }
   }
 

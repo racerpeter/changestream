@@ -14,6 +14,7 @@ class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
   protected val nextHop = getNextHop(context)
 
   /** Mutable State! */
+  protected var mutationCount: Long = 0
   protected var transactionInfo: Option[TransactionInfo] = None
   protected var previousMutation: Option[MutationWithInfo] = None
 
@@ -28,18 +29,19 @@ class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
   def receive = {
     case BeginTransaction =>
       log.debug(s"Received BeginTransacton")
-      setState(info = Some(TransactionInfo(UUID.randomUUID.toString, 0)), prev = None)
+      mutationCount = 0
+      setState(info = Some(TransactionInfo(UUID.randomUUID.toString)), prev = None)
 
     case Gtid(guid) =>
       log.debug(s"Received GTID for transaction: ${guid}")
-      setState(info = transactionInfo.map(info => info.copy(gtid = guid)))
+      setState(info = Some(TransactionInfo(guid)))
 
     case CommitTransaction =>
       log.debug(s"Received CommitTransacton")
       previousMutation.foreach { mutation =>
         log.debug(s"Adding transaction info and forwarding to the ${nextHop.path.name} actor")
         nextHop ! mutation.copy(transaction = transactionInfo.map { info =>
-          info.copy(lastMutationInTransaction = true)
+          info.copy(rowCount = mutationCount,lastMutationInTransaction = true)
         })
       }
       setState(info = None, prev = None)
@@ -57,11 +59,8 @@ class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
           previousMutation.foreach { mutation =>
             nextHop ! mutation.copy(transaction = transactionInfo)
           }
-
-          setState(
-            info = Some(TransactionInfo(info.gtid, info.rowCount + 1)),
-            prev = Some(event)
-          )
+          mutationCount += event.mutation.rows.length;
+          setState(prev = Some(event))
       }
 
     case _ =>

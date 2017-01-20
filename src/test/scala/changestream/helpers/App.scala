@@ -45,7 +45,8 @@ class App extends Database with Config {
                         transactionRowCount: Int = 1,
                         primaryKeyField: String = "id",
                         currentRow: Int = 1,
-                        sql: Option[String] = None
+                        sql: Option[String] = None,
+                        isLastMutation: Boolean = false
                       ): Unit = {
     val message = probe.expectMsgType[MutationWithInfo](15 seconds)
     message.formattedMessage.isDefined should be(true)
@@ -55,8 +56,12 @@ class App extends Database with Config {
     json should contain key ("sequence")
     json("database") should equal(JsString(database))
     json("table") should equal(JsString(table))
-    if(transactionRowCount > 1) {
+    if(isLastMutation) {
       json("transaction").asJsObject.fields("row_count") should equal(JsNumber(transactionRowCount))
+      json("transaction").asJsObject.fields("last_mutation") should equal(JsTrue)
+    } else {
+      json("transaction").asJsObject.fields.keys shouldNot contain("last_mutation")
+      json("transaction").asJsObject.fields.keys shouldNot contain("row_count")
     }
     json("query").asJsObject.fields("timestamp").asInstanceOf[JsNumber].value.toLong.compareTo(Fixtures.timestamp - 60000) should be(1)
     json("query").asJsObject.fields("row_count") should equal(JsNumber(queryRowCount))

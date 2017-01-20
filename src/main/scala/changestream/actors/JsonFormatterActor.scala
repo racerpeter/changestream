@@ -109,7 +109,8 @@ class JsonFormatterActor (
       val primaryKeys = message.columns.get.columns.collect({ case col if col.isPrimary => col.name })
       val rowData = getRowData(message)
       val oldRowData = getOldRowData(message)
-      val txInfo = transactionInfo(message)
+      lazy val txInfo = transactionInfo(message)
+      val lastTxInfo = transactionInfo(message, true)
 
       rowData.indices.foreach({ idx =>
         val row = rowData(idx)
@@ -120,7 +121,10 @@ class JsonFormatterActor (
 
         val payload =
           getJsonHeader(message, pkInfo, row, idx, rowData.length) ++
-          txInfo ++
+          ((idx == rowData.length - 1) match {
+            case true => lastTxInfo
+            case false => txInfo
+          }) ++
           getJsonRowData(row) ++
           updateInfo(oldRow)
         val json = JsObject(payload)
@@ -173,14 +177,16 @@ class JsonFormatterActor (
     }
   }
 
-  protected def transactionInfo(message: MutationWithInfo): ListMap[String, JsValue] = {
+  protected def transactionInfo(message: MutationWithInfo, last: Boolean = false): ListMap[String, JsValue] = {
     message.transaction match {
       case Some(txn) => ListMap(
         "transaction" -> JsObject(ListMap(
-          "id" -> txn.gtid.toJson,
-          "row_count" -> txn.rowCount.toJson
-        ) ++ (txn.lastMutationInTransaction match {
-          case true => ListMap("last_mutation" -> JsTrue)
+          "id" -> txn.gtid.toJson
+        ) ++ ((last && txn.lastMutationInTransaction) match {
+          case true => ListMap(
+            "last_mutation" -> JsTrue,
+            "row_count" -> txn.rowCount.toJson
+          )
           case false => ListMap.empty
         })
       ))
