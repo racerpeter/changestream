@@ -24,7 +24,8 @@ dependencies:
     - sbt sbt-version
     # Configure MySQL
     - mysql -e "CREATE USER 'changestream'@'localhost' IDENTIFIED BY 'changestreampass';GRANT REPLICATION SLAVE ON *.* TO 'changestream'@'localhost';GRANT ALL ON *.* TO 'changestream'@'localhost';" -uroot;
-    - case $CIRCLE_NODE_INDEX in 0) sudo mv src/test/resources/my.cnf /etc/my.cnf ;; 1) sudo mv src/test/resources/my-gtid.cnf /etc/my.cnf ;; esac
+    - [ "$CIRCLE_NODE_INDEX" == "0" ] && sudo mv src/test/resources/my.cnf /etc/my.cnf
+    - [ "$CIRCLE_NODE_INDEX" == "1" ] && sudo mv src/test/resources/my-gtid.cnf /etc/my.cnf
     - sudo service mysql restart
     - cat /etc/my.cnf
     - echo "show variables like 'gtid_mode';" | mysql -uroot
