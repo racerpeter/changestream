@@ -36,18 +36,14 @@ class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
       log.debug(s"Received GTID for transaction: ${guid}")
       setState(info = Some(TransactionInfo(guid)))
 
-    case CommitTransaction =>
-      log.debug(s"Received CommitTransacton")
+    case _: TransactionEvent =>
+      log.debug(s"Received Commit/Rollback")
       previousMutation.foreach { mutation =>
         log.debug(s"Adding transaction info and forwarding to the ${nextHop.path.name} actor")
         nextHop ! mutation.copy(transaction = transactionInfo.map { info =>
           info.copy(rowCount = mutationCount,lastMutationInTransaction = true)
         })
       }
-      setState(info = None, prev = None)
-
-    case RollbackTransaction =>
-      log.debug(s"Received RollbackTransacton")
       setState(info = None, prev = None)
 
     case event: MutationWithInfo =>

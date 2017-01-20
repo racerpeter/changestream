@@ -71,7 +71,16 @@ class TransactionActorSpec extends Base {
       transactionActor ! BeginTransaction
       transactionActor ! mutationFirstInput
       transactionActor ! RollbackTransaction
-      expectNoMsg
+      /**
+        * Modifications to nontransactional tables cannot be rolled back.
+        * If a transaction that is rolled back includes modifications to
+        * nontransactional tables, the entire transaction is logged with
+        * a ROLLBACK statement at the end to ensure that the modifications
+        * to those tables are replicated.
+        *
+        * http://dev.mysql.com/doc/refman/5.7/en/binary-log.html
+        */
+      probe.receiveN(1)
 
       transactionActor ! mutationNextInput
       expectMessageFuzzyGuidMatch(mutationNextInput)
