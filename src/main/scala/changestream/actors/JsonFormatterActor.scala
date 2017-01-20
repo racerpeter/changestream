@@ -176,12 +176,15 @@ class JsonFormatterActor (
   protected def transactionInfo(message: MutationWithInfo): ListMap[String, JsValue] = {
     message.transaction match {
       case Some(txn) => ListMap(
-        "transaction" -> JsObject(
+        "transaction" -> JsObject(ListMap(
           "id" -> txn.gtid.toJson,
           "row_count" -> txn.rowCount.toJson
-        )
-      )
-      case None => ListMap.empty[String, JsValue]
+        ) ++ (txn.lastMutationInTransaction match {
+          case true => ListMap("last_mutation" -> JsTrue)
+          case false => ListMap.empty
+        })
+      ))
+      case None => ListMap.empty
     }
   }
 
@@ -209,11 +212,11 @@ class JsonFormatterActor (
 
   protected def getJsonRowData(rowData: ListMap[String, JsValue]): ListMap[String, JsValue] = includeData match {
     case true => ListMap("row_data" -> JsObject(rowData))
-    case false => ListMap.empty[String, JsValue]
+    case false => ListMap.empty
   }
 
   protected def updateInfo(oldRowData: Option[ListMap[String, JsValue]]): ListMap[String, JsValue] = includeData match {
-    case true => oldRowData.map({ row => ListMap("old_row_data" -> JsObject(row)) }).getOrElse(ListMap.empty[String, JsValue])
-    case false => ListMap.empty[String, JsValue]
+    case true => oldRowData.map({ row => ListMap("old_row_data" -> JsObject(row)) }).getOrElse(ListMap.empty)
+    case false => ListMap.empty
   }
 }
