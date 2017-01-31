@@ -20,11 +20,11 @@ dependencies:
     - wget --no-clobber --output-document=$HOME/sbt/sbt-launch-"$SBT_VERSION.jar" https://repo.typesafe.com/typesafe/ivy-releases/org.scala-sbt/sbt-launch/"$SBT_VERSION"/sbt-launch.jar || true
     - echo "java $SBT_OPTS -jar $HOME/sbt/sbt-launch-$SBT_VERSION.jar \"\$@\"" > $HOME/bin/sbt
     - chmod u+x $HOME/bin/sbt
-    -  which sbt
+    - which sbt
     - sbt sbt-version
     # Configure MySQL
     - mysql -e "CREATE USER 'changestream'@'localhost' IDENTIFIED BY 'changestreampass';GRANT REPLICATION SLAVE ON *.* TO 'changestream'@'localhost';GRANT ALL ON *.* TO 'changestream'@'localhost';" -uroot;
-    - case $CIRCLE_NODE_INDEX in 0) MY_CNF="my.cnf" ;; 1) MY_CNF="my-gtid.cnf" ;; esac; sudo mv src/test/resources/$MY_CNF /etc/my.cnf
+    - chmod +x *.sh && ./circle.mycnf.sh
     - sudo service mysql restart
     - cat /etc/my.cnf
     - echo "show variables like 'gtid_mode';" | mysql -uroot

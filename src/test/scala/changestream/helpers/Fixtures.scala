@@ -145,11 +145,22 @@ object Fixtures {
     }).toArray
   }
 
-  def transactionInfo(rowCount: Int = 1) =
-    TransactionInfo(java.util.UUID.randomUUID().toString, rowCount)
-  def transactionInfoGtid(rowCount: Int = 1) =
-    TransactionInfo(s"${java.util.UUID.randomUUID().toString}:${Random.nextInt(100000)}", rowCount)
-  def transactionInfoEither(rowCount: Int = 1) = Random.nextInt(2) match { case 0 => transactionInfo(rowCount) case 1 => transactionInfoGtid(rowCount) }
+  def transactionInfo(rowsInTransaction: Int = 1, isLastChangeInTransaction: Boolean = false) =
+    TransactionInfo(
+      java.util.UUID.randomUUID().toString,
+      isLastChangeInTransaction match { case true => rowsInTransaction case false => 0 },
+      isLastChangeInTransaction
+    )
+  def transactionInfoGtid(rowsInTransaction: Int = 1, isLastChangeInTransaction: Boolean = false) =
+    TransactionInfo(
+      s"${java.util.UUID.randomUUID().toString}:${Random.nextInt(100000)}",
+      isLastChangeInTransaction match { case true => rowsInTransaction case false => 0 },
+      isLastChangeInTransaction
+    )
+  def transactionInfoEither(rowsInTransaction: Int = 1, isLastChangeInTransaction: Boolean = false) = Random.nextInt(2) match {
+    case 0 => transactionInfo(rowsInTransaction, isLastChangeInTransaction)
+    case 1 => transactionInfoGtid(rowsInTransaction, isLastChangeInTransaction)
+  }
 
   def mutationWithInfo(
                         mutationType: String,
@@ -160,13 +171,14 @@ object Fixtures {
                         sequenceNext: Long = 0,
                         database: String = "changestream_test",
                         tableName: String = "users",
-                        tableId: Int = 123
+                        tableId: Int = 123,
+                        isLastChangeInTransaction: Boolean = false
                       ): (MutationWithInfo, Seq[ListMap[String, Any]], Seq[ListMap[String, Any]]) = {
     val (m, d, od) = mutation(mutationType, rowCount, rowsInTransaction, sequenceNext, database, tableName, tableId)
     (MutationWithInfo(
       m,
       transaction = transactionInfo match {
-        case true => Some(transactionInfoEither(rowsInTransaction))
+        case true => Some(transactionInfoEither(rowsInTransaction, isLastChangeInTransaction))
         case false => None
       },
       columns = columns match {

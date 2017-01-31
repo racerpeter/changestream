@@ -14,49 +14,49 @@ class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
   protected val nextHop = getNextHop(context)
 
   /** Mutable State! */
-  protected val mutationBuffer = mutable.ArrayBuffer.empty[MutationWithInfo]
-  protected var inTransaction = false
-  protected var transactionId: Option[String] = None
+  protected var mutationCount: Long = 0
+  protected var transactionInfo: Option[TransactionInfo] = None
+  protected var previousMutation: Option[MutationWithInfo] = None
+
+  protected def setState(
+                          info: Option[TransactionInfo] = transactionInfo,
+                          prev: Option[MutationWithInfo] = previousMutation
+                        ) = {
+    transactionInfo = info
+    previousMutation = prev
+  }
 
   def receive = {
     case BeginTransaction =>
       log.debug(s"Received BeginTransacton")
+      mutationCount = 0
+      setState(info = Some(TransactionInfo(UUID.randomUUID.toString)), prev = None)
 
-      inTransaction = true
+    case Gtid(guid) =>
+      log.debug(s"Received GTID for transaction: ${guid}")
+      setState(info = Some(TransactionInfo(guid)))
 
-    case Gtid(gtid) =>
-      log.debug(s"Received GTID for transaction: ${gtid}")
-      transactionId = Some(gtid)
-
-    case CommitTransaction =>
-      log.debug(s"Received CommitTransacton")
-
-      lazy val txid = transactionId.getOrElse(UUID.randomUUID.toString)
-      lazy val transactionInfo = TransactionInfo(txid, mutationBuffer.view.map(_.mutation.rows.length).sum)
-
-      mutationBuffer.foreach(event => {
+    case _: TransactionEvent =>
+      log.debug(s"Received Commit/Rollback")
+      previousMutation.foreach { mutation =>
         log.debug(s"Adding transaction info and forwarding to the ${nextHop.path.name} actor")
-        nextHop ! event.copy(transaction = Some(transactionInfo))
-      })
-
-      inTransaction = false
-      mutationBuffer.clear()
-
-    case RollbackTransaction =>
-      log.debug(s"Received RollbackTransacton")
-
-      inTransaction = false
-      mutationBuffer.clear()
+        nextHop ! mutation.copy(transaction = transactionInfo.map { info =>
+          info.copy(rowCount = mutationCount,lastMutationInTransaction = true)
+        })
+      }
+      setState(info = None, prev = None)
 
     case event: MutationWithInfo =>
       log.debug(s"Received Mutation for tableId: ${event.mutation.tableId}")
-
-      inTransaction match {
-        case false =>
-          log.debug(s"Forwarding mutation with no transaction to the ${nextHop.path.name} actor")
+      transactionInfo match {
+        case None =>
           nextHop ! event
-        case true =>
-          mutationBuffer += event
+        case Some(info) =>
+          previousMutation.foreach { mutation =>
+            nextHop ! mutation.copy(transaction = transactionInfo)
+          }
+          mutationCount += event.mutation.rows.length;
+          setState(prev = Some(event))
       }
 
     case _ =>

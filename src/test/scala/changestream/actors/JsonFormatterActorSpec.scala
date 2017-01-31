@@ -100,7 +100,7 @@ class JsonFormatterActorSpec extends Base with Config {
     }
   }
 
-  def haveValidTransactionInfo(json: Map[String, JsValue]) = {
+  def haveValidTransactionInfo(json: Map[String, JsValue], isLastMutationInTransaction: Boolean = false) = {
     "have valid transaction id" in {
       json should contain key "transaction"
       val txJson = getJsFields(json("transaction"))
@@ -108,16 +108,39 @@ class JsonFormatterActorSpec extends Base with Config {
       txJson("id").toString(jsStringPrinter) should fullyMatch regex "(?i)([0-9a-fA-F]){8}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){12}(:\\d+)?"
     }
 
-    "have valid transaction row_count" in {
-      json should contain key "transaction"
-      val txJson = getJsFields(json("transaction"))
-      val rowCountCheck = txJson("row_count") match {
-        case JsNumber(num) if (num >= 1) =>
-          "valid number"
-        case _ =>
-          "invalid"
+    if(isLastMutationInTransaction) {
+      "have valid transaction row_count" in {
+        json should contain key "transaction"
+        val txJson = getJsFields(json("transaction"))
+        val rowCountCheck = txJson("row_count") match {
+          case JsNumber(num) if (num >= 1) =>
+            "valid number"
+          case _ =>
+            "invalid"
+        }
+        rowCountCheck should be("valid number")
       }
-      rowCountCheck should be("valid number")
+
+      "have the last mutation flag" in {
+        val txJson = getJsFields(json("transaction"))
+        txJson should contain key "last_mutation"
+        (txJson("last_mutation") match {
+          case JsTrue =>
+            "present/true"
+          case JsFalse =>
+            "present/false"
+          case _ =>
+            "absent"
+        }) should be("present/true")
+      }
+    }
+    else {
+      "not have the row_count flag" in {
+        getJsFields(json("transaction")) shouldNot contain key "row_count"
+      }
+      "not have the last mutation flag" in {
+        getJsFields(json("transaction")) shouldNot contain key "last_mutation"
+      }
     }
   }
 
@@ -216,13 +239,13 @@ class JsonFormatterActorSpec extends Base with Config {
     }
   }
 
-  def jsonChecksOut(inTransaction: Boolean, json: Map[String, JsValue], mutation: MutationWithInfo, rowData: ListMap[String, Any]) = {
+  def jsonChecksOut(inTransaction: Boolean, json: Map[String, JsValue], mutation: MutationWithInfo, rowData: ListMap[String, Any], isLastMutationInTransaction: Boolean = false) = {
     val sql = mutation.mutation.sql.get
     val columns = mutation.columns.get
     val timestamp = mutation.mutation.timestamp
 
     if(inTransaction) {
-      haveValidTransactionInfo(json)
+      haveValidTransactionInfo(json, isLastMutationInTransaction)
     }
     else {
       haveNoTransactionInfo(json)
@@ -236,10 +259,10 @@ class JsonFormatterActorSpec extends Base with Config {
     haveValidData(jsonData, rowData)
   }
 
-  def crudAllChecksOut(inTransaction: Boolean, rowCount: Int, transactionRowCount: Int) = {
+  def crudAllChecksOut(inTransaction: Boolean, rowCount: Int, transactionRowCount: Int, isLastMutationInTransaction: Boolean = false) = {
     Seq("insert", "update", "delete").foreach(mutationType =>
       s"when mutation is a/an ${mutationType}" should {
-        val (mutation, rowData, oldRowData) = Fixtures.mutationWithInfo(mutationType, rowCount, transactionRowCount, inTransaction)
+        val (mutation, rowData, oldRowData) = Fixtures.mutationWithInfo(mutationType, rowCount, transactionRowCount, inTransaction, isLastChangeInTransaction = isLastMutationInTransaction)
         val jsons = expectJsonFrom(mutation, rowCount)
 
         jsons.zipWithIndex.foreach({
@@ -255,7 +278,7 @@ class JsonFormatterActorSpec extends Base with Config {
                 beValidDelete(json)
               }
 
-              jsonChecksOut(inTransaction, json, mutation, rowData(idx))
+              jsonChecksOut(inTransaction, json, mutation, rowData(idx), isLastMutationInTransaction)
             }
         })
       }
@@ -270,6 +293,9 @@ class JsonFormatterActorSpec extends Base with Config {
       val rowCount = 10
       val transactionCount = rowCount + Random.nextInt(100)
       crudAllChecksOut(inTransaction = true, rowCount, transactionCount)
+    }
+    "for the last mutation in a transaction" should {
+      crudAllChecksOut(inTransaction = true, rowCount = 1, transactionRowCount = 1, isLastMutationInTransaction = true)
     }
   }
 

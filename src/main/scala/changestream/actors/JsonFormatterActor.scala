@@ -109,7 +109,8 @@ class JsonFormatterActor (
       val primaryKeys = message.columns.get.columns.collect({ case col if col.isPrimary => col.name })
       val rowData = getRowData(message)
       val oldRowData = getOldRowData(message)
-      val txInfo = transactionInfo(message)
+      lazy val txInfo = transactionInfo(message)
+      val lastTxInfo = transactionInfo(message, true)
 
       rowData.indices.foreach({ idx =>
         val row = rowData(idx)
@@ -120,7 +121,10 @@ class JsonFormatterActor (
 
         val payload =
           getJsonHeader(message, pkInfo, row, idx, rowData.length) ++
-          txInfo ++
+          ((idx == rowData.length - 1) match {
+            case true => lastTxInfo
+            case false => txInfo
+          }) ++
           getJsonRowData(row) ++
           updateInfo(oldRow)
         val json = JsObject(payload)
@@ -173,15 +177,20 @@ class JsonFormatterActor (
     }
   }
 
-  protected def transactionInfo(message: MutationWithInfo): ListMap[String, JsValue] = {
+  protected def transactionInfo(message: MutationWithInfo, last: Boolean = false): ListMap[String, JsValue] = {
     message.transaction match {
       case Some(txn) => ListMap(
-        "transaction" -> JsObject(
-          "id" -> txn.guid.toJson,
-          "row_count" -> txn.rowCount.toJson
-        )
-      )
-      case None => ListMap.empty[String, JsValue]
+        "transaction" -> JsObject(ListMap(
+          "id" -> txn.gtid.toJson
+        ) ++ ((last && txn.lastMutationInTransaction) match {
+          case true => ListMap(
+            "last_mutation" -> JsTrue,
+            "row_count" -> txn.rowCount.toJson
+          )
+          case false => ListMap.empty
+        })
+      ))
+      case None => ListMap.empty
     }
   }
 
@@ -209,11 +218,11 @@ class JsonFormatterActor (
 
   protected def getJsonRowData(rowData: ListMap[String, JsValue]): ListMap[String, JsValue] = includeData match {
     case true => ListMap("row_data" -> JsObject(rowData))
-    case false => ListMap.empty[String, JsValue]
+    case false => ListMap.empty
   }
 
   protected def updateInfo(oldRowData: Option[ListMap[String, JsValue]]): ListMap[String, JsValue] = includeData match {
-    case true => oldRowData.map({ row => ListMap("old_row_data" -> JsObject(row)) }).getOrElse(ListMap.empty[String, JsValue])
-    case false => ListMap.empty[String, JsValue]
+    case true => oldRowData.map({ row => ListMap("old_row_data" -> JsObject(row)) }).getOrElse(ListMap.empty)
+    case false => ListMap.empty
   }
 }
