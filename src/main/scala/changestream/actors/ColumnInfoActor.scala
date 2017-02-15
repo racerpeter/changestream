@@ -210,6 +210,7 @@ class ColumnInfoActor (
         |   and col.TABLE_NAME = pk.TABLE_NAME
         |   and col.COLUMN_NAME = pk.COLUMN_NAME
         | where col.TABLE_SCHEMA in ('${databases}')
+        | order by col.ORDINAL_POSITION
       """.stripMargin)
       .map(queryResult =>
         queryResult.rows.map(
