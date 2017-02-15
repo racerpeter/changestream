@@ -153,12 +153,8 @@ class ColumnInfoActor (
         | select
         |   col.COLUMN_NAME,
         |   col.DATA_TYPE,
-        |   case when pk.COLUMN_NAME is not null then true else false end as IS_PRIMARY
+        |   case when col.COLUMN_KEY = 'PRI' then true else false end as IS_PRIMARY
         | from INFORMATION_SCHEMA.COLUMNS col
-        | left outer join INFORMATION_SCHEMA.KEY_COLUMN_USAGE pk
-        |   on col.TABLE_SCHEMA = pk.TABLE_SCHEMA
-        |   and col.TABLE_NAME = pk.TABLE_NAME
-        |   and col.COLUMN_NAME = pk.COLUMN_NAME
         | where col.TABLE_SCHEMA = '${escapedDatabase}'
         |   and col.TABLE_NAME = '${escapedTableName}'
         | order by col.ORDINAL_POSITION
@@ -201,14 +197,10 @@ class ColumnInfoActor (
         | select
         |   lower(col.COLUMN_NAME),
         |   lower(col.DATA_TYPE),
-        |   case when pk.COLUMN_NAME is not null then true else false end as IS_PRIMARY,
+        |   case when col.COLUMN_KEY = 'PRI' then true else false end as IS_PRIMARY,
         |   lower(col.TABLE_SCHEMA) as DATABASE_NAME,
         |   lower(col.TABLE_NAME)
         | from INFORMATION_SCHEMA.COLUMNS col
-        | left outer join INFORMATION_SCHEMA.KEY_COLUMN_USAGE pk
-        |   on col.TABLE_SCHEMA = pk.TABLE_SCHEMA
-        |   and col.TABLE_NAME = pk.TABLE_NAME
-        |   and col.COLUMN_NAME = pk.COLUMN_NAME
         | where col.TABLE_SCHEMA in ('${databases}')
         | order by col.ORDINAL_POSITION
       """.stripMargin)

@@ -109,5 +109,26 @@ class ColumnInfoActorSpec extends Database {
           cols.get.columns should be(columns)
       }
     }
+
+    "Returns the columns in ordinal_position (binlog) order" in {
+      var alterSql = "alter table changestream_test.users add column email varchar(128) unique"
+      queryAndWait(alterSql)
+
+      val alter1 = AlterTableEvent(database, tableName, alterSql)
+      val m1ni = mutationWithNoInfo
+
+      columnInfoActor ! alter1
+      columnInfoActor ! m1ni
+
+      inside(probe.expectMsgType[MutationWithInfo](connectionTimeout milliseconds)) {
+        case MutationWithInfo(m, tx, cols, _) =>
+          m should be(m1ni.mutation)
+          tx should be(m1ni.transaction)
+          cols should not be empty
+          cols.get.database should be(database)
+          cols.get.tableName should be(tableName)
+          cols.get.columns should be(columns :+ Column("email", "varchar", false))
+      }
+    }
   }
 }
