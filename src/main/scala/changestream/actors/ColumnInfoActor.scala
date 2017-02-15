@@ -161,6 +161,7 @@ class ColumnInfoActor (
         |   and col.COLUMN_NAME = pk.COLUMN_NAME
         | where col.TABLE_SCHEMA = '${escapedDatabase}'
         |   and col.TABLE_NAME = '${escapedTableName}'
+        | order by col.ORDINAL_POSITION
       """.stripMargin)
       .map(_.rows.map(_.map(getColumnForRow)) match {
         case Some(list) if !list.isEmpty =>
