@@ -57,19 +57,9 @@ object ChangeStream extends App {
   /** Start the HTTP server for status and control **/
   protected val controlFuture = IO(Http).ask(Http.Bind(listener = controlActor, interface = host, port = port)).map {
     case Http.Bound(address) =>
-      println(s"Control interface bound to ${address}")
+      log.info(s"Control interface bound to ${address}")
     case Http.CommandFailed(cmd) =>
-      println(s"Control interface could not bind to ${host}:${port}, ${cmd.failureMessage}")
-
-      terminateActorSystemAndWait
-      System.exit(2)
-  }
-  controlFuture onFailure {
-    case e: java.util.concurrent.TimeoutException =>
-      log.warn(s"Failed to bind to control port at ${host}:${port}!!", e)
-  }
-  controlFuture onSuccess {
-    case _ => log.info(s"Successfully bound to control port at ${host}:${port}")
+      log.warn(s"Control interface could not bind to ${host}:${port}, ${cmd.failureMessage}")
   }
 
   /** Every changestream instance must have a unique server-id.
