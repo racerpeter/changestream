@@ -1,6 +1,7 @@
 package changestream
 
 import java.io.IOException
+import java.util.concurrent.TimeoutException
 
 import akka.actor.{ActorSystem, Props}
 import com.github.shyiko.mysql.binlog.BinaryLogClient
@@ -63,7 +64,13 @@ object ChangeStream extends App {
       terminateActorSystemAndWait
       System.exit(2)
   }
-  Await.result(controlFuture, 5000 milliseconds)
+  controlFuture onFailure {
+    case e: java.util.concurrent.TimeoutException =>
+      log.warn(s"Failed to bind to control port at ${host}:${port}!!", e)
+  }
+  controlFuture onSuccess {
+    case _ => log.info(s"Successfully bound to control port at ${host}:${port}")
+  }
 
   /** Every changestream instance must have a unique server-id.
     *
