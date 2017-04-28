@@ -1,7 +1,6 @@
 package changestream
 
 import java.io.IOException
-import java.util.concurrent.TimeoutException
 
 import akka.actor.{ActorSystem, Props}
 import com.github.shyiko.mysql.binlog.BinaryLogClient
@@ -11,7 +10,7 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import scala.language.postfixOps
-import akka.pattern.{after, ask}
+import akka.pattern.ask
 import akka.io.IO
 import akka.util.Timeout
 import changestream.actors.ControlInterfaceActor
