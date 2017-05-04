@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import scala.language.postfixOps
-import akka.pattern.{after, ask}
+import akka.pattern.ask
 import akka.io.IO
 import akka.util.Timeout
 import changestream.actors.ControlInterfaceActor
@@ -56,14 +56,10 @@ object ChangeStream extends App {
   /** Start the HTTP server for status and control **/
   protected val controlFuture = IO(Http).ask(Http.Bind(listener = controlActor, interface = host, port = port)).map {
     case Http.Bound(address) =>
-      println(s"Control interface bound to ${address}")
+      log.info(s"Control interface bound to ${address}")
     case Http.CommandFailed(cmd) =>
-      println(s"Control interface could not bind to ${host}:${port}, ${cmd.failureMessage}")
-
-      terminateActorSystemAndWait
-      System.exit(2)
+      log.warn(s"Control interface could not bind to ${host}:${port}, ${cmd.failureMessage}")
   }
-  Await.result(controlFuture, 5000 milliseconds)
 
   /** Every changestream instance must have a unique server-id.
     *
