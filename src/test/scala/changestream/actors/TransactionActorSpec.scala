@@ -13,11 +13,11 @@ class TransactionActorSpec extends Base {
 
   val GUID_LENGTH = 36
   val (mutationNoTransaction, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionInfo = false, columns = false)
-  val (mutationFirstOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionCurrentRow = 0, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
-  val (mutationNextOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionCurrentRow = 1, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
-  val (mutationLastOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionCurrentRow = 2, transactionInfo = true, isLastChangeInTransaction = true, columns = false)
-  val (mutationMultiOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 10, transactionCurrentRow = 0, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
-  val (mutationMultiNextOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionCurrentRow = 10, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
+  val (mutationFirstOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionCurrentRow = 1, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
+  val (mutationNextOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionCurrentRow = 2, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
+  val (mutationLastOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionCurrentRow = 3, transactionInfo = true, isLastChangeInTransaction = true, columns = false)
+  val (mutationMultiOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 10, transactionCurrentRow = 1, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
+  val (mutationMultiNextOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionCurrentRow = 11, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
   val mutationFirstInput = mutationFirstOutput.copy(transaction = None)
   val mutationNextInput = mutationNextOutput.copy(transaction = None)
   val mutationLastInput = mutationLastOutput.copy(transaction = None)
@@ -125,8 +125,8 @@ class TransactionActorSpec extends Base {
       inside(m1.transaction) { case Some(info1) =>
         inside(m2.transaction) { case Some(info2) =>
           info1.gtid should be(info2.gtid)
-          info1.currentRow should be(0)
-          info2.currentRow should be(1)
+          info1.currentRow should be(1)
+          info2.currentRow should be(2)
           info1.lastMutationInTransaction should be(false)
           info2.lastMutationInTransaction should be(true)
         }

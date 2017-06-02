@@ -14,14 +14,14 @@ class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
   protected val nextHop = getNextHop(context)
 
   /** Mutable State! */
-  protected var mutationCount: Long = 0
+  protected var mutationCount: Long = 1
   protected var currentGtid: Option[String] = None
   protected var previousMutation: Option[MutationWithInfo] = None
 
   def receive = {
     case BeginTransaction =>
       log.debug(s"Received BeginTransacton")
-      mutationCount = 0
+      mutationCount = 1
       currentGtid = Some(UUID.randomUUID.toString)
       previousMutation = None
 
@@ -50,7 +50,7 @@ class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
           TransactionInfo(gtid = gtid, currentRow = mutationCount, lastMutationInTransaction = true)
         })
       }
-      mutationCount = 0
+      mutationCount = 1
       currentGtid = None
       previousMutation = None
 
