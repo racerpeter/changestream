@@ -36,9 +36,15 @@ class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
           nextHop ! event
         case Some(gtid) =>
           previousMutation.foreach { mutation =>
+            log.debug(s"Adding transaction info and forwarding to the ${nextHop.path.name} actor")
             nextHop ! mutation
           }
-          previousMutation = Some(event.copy(transaction = Some(TransactionInfo(gtid = gtid, currentRow = mutationCount))))
+          previousMutation = Some(event.copy(
+            transaction = Some(TransactionInfo(
+              gtid = gtid,
+              currentRow = mutationCount
+            ))
+          ))
           mutationCount += event.mutation.rows.length
       }
 
@@ -46,9 +52,11 @@ class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
       log.debug(s"Received Commit/Rollback")
       previousMutation.foreach { mutation =>
         log.debug(s"Adding transaction info and forwarding to the ${nextHop.path.name} actor")
-        nextHop ! mutation.copy(transaction = currentGtid.map { gtid =>
-          TransactionInfo(gtid = gtid, currentRow = mutationCount, lastMutationInTransaction = true)
-        })
+        nextHop ! mutation.copy(
+          transaction = mutation.transaction.map { txInfo =>
+            txInfo.copy(lastMutationInTransaction = true)
+          }
+        )
       }
       mutationCount = 1
       currentGtid = None

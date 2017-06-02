@@ -63,7 +63,7 @@ class TransactionActorSpec extends Base {
 
         transactionActor ! mutationMultiInput
 
-        transactionActor ! mutationNextInput
+        transactionActor ! mutationMultiNextInput
         expectMessageFuzzyGuidMatch(mutationMultiOutput)
 
         transactionActor ! mutationLastInput
