@@ -1,13 +1,14 @@
 package changestream
 
-import scala.reflect.ClassTag
-import changestream.helpers.{Base, Config}
-import com.github.shyiko.mysql.binlog.event._
-import com.github.shyiko.mysql.binlog.event.EventType._
 import java.util
 
 import changestream.events._
+import changestream.helpers.{Base, Config}
+import com.github.shyiko.mysql.binlog.event.EventType._
+import com.github.shyiko.mysql.binlog.event._
 import com.typesafe.config.ConfigFactory
+
+import scala.reflect.ClassTag
 
 class ChangeStreamEventListenerSpec extends Base with Config {
   def getTypedEvent[T: ClassTag](event: Event): Option[T] = ChangeStreamEventListener.getChangeEvent(event) match {
