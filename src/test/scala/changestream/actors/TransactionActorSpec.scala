@@ -13,12 +13,16 @@ class TransactionActorSpec extends Base {
 
   val GUID_LENGTH = 36
   val (mutationNoTransaction, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionInfo = false, columns = false)
-  val (mutationFirstOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, rowsInTransaction = 1, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
-  val (mutationNextOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, rowsInTransaction = 2, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
-  val (mutationLastOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, rowsInTransaction = 3, transactionInfo = true, isLastChangeInTransaction = true, columns = false)
+  val (mutationFirstOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionCurrentRow = 1, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
+  val (mutationNextOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionCurrentRow = 2, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
+  val (mutationLastOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionCurrentRow = 3, transactionInfo = true, isLastChangeInTransaction = true, columns = false)
+  val (mutationMultiOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 10, transactionCurrentRow = 1, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
+  val (mutationMultiNextOutput, _, _) = Fixtures.mutationWithInfo("insert", rowCount = 1, transactionCurrentRow = 11, transactionInfo = true, isLastChangeInTransaction = false, columns = false)
   val mutationFirstInput = mutationFirstOutput.copy(transaction = None)
   val mutationNextInput = mutationNextOutput.copy(transaction = None)
   val mutationLastInput = mutationLastOutput.copy(transaction = None)
+  val mutationMultiInput = mutationMultiOutput.copy(transaction = None)
+  val mutationMultiNextInput = mutationMultiNextOutput.copy(transaction = None)
   val gtid = "9fc4cdc0-8f3b-11e6-a5b1-e39f73659fee:24"
 
   def expectMessageFuzzyGuidMatch(mutation: MutationWithInfo) = {
@@ -52,6 +56,18 @@ class TransactionActorSpec extends Base {
 
         transactionActor ! mutationLastInput
         expectMessageFuzzyGuidMatch(mutationNextOutput)
+      }
+
+      "when receiving a subsequent event should emit correct currentRow when previous event contains multiple rows" in {
+        transactionActor ! BeginTransaction
+
+        transactionActor ! mutationMultiInput
+
+        transactionActor ! mutationMultiNextInput
+        expectMessageFuzzyGuidMatch(mutationMultiOutput)
+
+        transactionActor ! mutationLastInput
+        expectMessageFuzzyGuidMatch(mutationMultiNextOutput)
       }
 
       "when committing a transaction should emit last event with correct flag" in {
@@ -109,8 +125,8 @@ class TransactionActorSpec extends Base {
       inside(m1.transaction) { case Some(info1) =>
         inside(m2.transaction) { case Some(info2) =>
           info1.gtid should be(info2.gtid)
-          info1.rowCount should be(0)
-          info2.rowCount should be(2)
+          info1.currentRow should be(1)
+          info2.currentRow should be(2)
           info1.lastMutationInTransaction should be(false)
           info2.lastMutationInTransaction should be(true)
         }

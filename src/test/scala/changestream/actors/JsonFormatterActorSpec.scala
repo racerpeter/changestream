@@ -108,19 +108,19 @@ class JsonFormatterActorSpec extends Base with Config {
       txJson("id").toString(jsStringPrinter) should fullyMatch regex "(?i)([0-9a-fA-F]){8}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){12}(:\\d+)?"
     }
 
-    if(isLastMutationInTransaction) {
-      "have valid transaction row_count" in {
-        json should contain key "transaction"
-        val txJson = getJsFields(json("transaction"))
-        val rowCountCheck = txJson("row_count") match {
-          case JsNumber(num) if (num >= 1) =>
-            "valid number"
-          case _ =>
-            "invalid"
-        }
-        rowCountCheck should be("valid number")
+    "have valid transaction current_row" in {
+      json should contain key "transaction"
+      val txJson = getJsFields(json("transaction"))
+      val rowCountCheck = txJson("current_row") match {
+        case JsNumber(num) if (num >= 1) =>
+          "valid number"
+        case _ =>
+          "invalid"
       }
+      rowCountCheck should be("valid number")
+    }
 
+    if(isLastMutationInTransaction) {
       "have the last mutation flag" in {
         val txJson = getJsFields(json("transaction"))
         txJson should contain key "last_mutation"
@@ -135,9 +135,6 @@ class JsonFormatterActorSpec extends Base with Config {
       }
     }
     else {
-      "not have the row_count flag" in {
-        getJsFields(json("transaction")) shouldNot contain key "row_count"
-      }
       "not have the last mutation flag" in {
         getJsFields(json("transaction")) shouldNot contain key "last_mutation"
       }
@@ -311,7 +308,7 @@ class JsonFormatterActorSpec extends Base with Config {
   }
 
   "When JsonFormatterActor receives many messages" should {
-    "row_count stats should be correct" in {
+    "query row_count stats should be correct" in {
       val (mutation, rowData, oldRowData) = Fixtures.mutationWithInfo("update", 100, 100, true)
       val jsons = expectJsonFrom(mutation, 100)
 
@@ -321,6 +318,18 @@ class JsonFormatterActorSpec extends Base with Config {
           val query = getJsFields(json("query"))
           tryJsNumber(query("row_count")) should be(100)
           tryJsNumber(query("current_row")) should be(idx + 1)
+      })
+    }
+
+    "transaction current_row should be correct" in {
+      val (mutation, rowData, oldRowData) = Fixtures.mutationWithInfo("update", 100, 1, true)
+      val jsons = expectJsonFrom(mutation, 100)
+
+      jsons.zipWithIndex.foreach({
+        case (json, idx) =>
+          json should contain key "transaction"
+          val transaction = getJsFields(json("transaction"))
+          tryJsNumber(transaction("current_row")) should be(idx + 1)
       })
     }
   }

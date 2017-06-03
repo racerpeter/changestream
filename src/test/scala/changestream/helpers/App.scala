@@ -42,7 +42,7 @@ class App extends Database with Config {
                         database: String = "changestream_test",
                         table: String = "users",
                         queryRowCount: Int = 1,
-                        transactionRowCount: Int = 1,
+                        transactionCurrentRow: Int = 1,
                         primaryKeyField: String = "id",
                         currentRow: Int = 1,
                         sql: Option[String] = None,
@@ -56,12 +56,11 @@ class App extends Database with Config {
     json should contain key ("sequence")
     json("database") should equal(JsString(database))
     json("table") should equal(JsString(table))
+    json("transaction").asJsObject.fields("current_row") should equal(JsNumber(transactionCurrentRow))
     if(isLastMutation) {
-      json("transaction").asJsObject.fields("row_count") should equal(JsNumber(transactionRowCount))
       json("transaction").asJsObject.fields("last_mutation") should equal(JsTrue)
     } else {
       json("transaction").asJsObject.fields.keys shouldNot contain("last_mutation")
-      json("transaction").asJsObject.fields.keys shouldNot contain("row_count")
     }
     json("query").asJsObject.fields("timestamp").asInstanceOf[JsNumber].value.toLong.compareTo(Fixtures.timestamp - 60000) should be(1)
     json("query").asJsObject.fields("row_count") should equal(JsNumber(queryRowCount))

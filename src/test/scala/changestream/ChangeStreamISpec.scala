@@ -15,8 +15,8 @@ class ChangeStreamISpec extends App {
     "affecting multiple rows, generates multiple insert events" in {
       queryAndWait(INSERT_MULTI)
 
-      assertValidEvent("insert", queryRowCount = 2, currentRow = 1, transactionRowCount = 2, sql = Some(INSERT_MULTI))
-      assertValidEvent("insert", queryRowCount = 2, currentRow = 2, transactionRowCount = 2, sql = Some(INSERT_MULTI), isLastMutation = true)
+      assertValidEvent("insert", queryRowCount = 2, currentRow = 1, transactionCurrentRow = 1, sql = Some(INSERT_MULTI))
+      assertValidEvent("insert", queryRowCount = 2, currentRow = 2, transactionCurrentRow = 2, sql = Some(INSERT_MULTI), isLastMutation = true)
     }
   }
 
@@ -36,8 +36,8 @@ class ChangeStreamISpec extends App {
       waitAndClear(2)
 
       queryAndWait(UPDATE_ALL)
-      assertValidEvent("update", queryRowCount = 2, currentRow = 1, transactionRowCount = 2, sql = Some(UPDATE_ALL))
-      assertValidEvent("update", queryRowCount = 2, currentRow = 2, transactionRowCount = 2, sql = Some(UPDATE_ALL), isLastMutation = true)
+      assertValidEvent("update", queryRowCount = 2, currentRow = 1, transactionCurrentRow = 1, sql = Some(UPDATE_ALL))
+      assertValidEvent("update", queryRowCount = 2, currentRow = 2, transactionCurrentRow = 2, sql = Some(UPDATE_ALL), isLastMutation = true)
     }
   }
 
@@ -55,8 +55,8 @@ class ChangeStreamISpec extends App {
       waitAndClear(2)
 
       queryAndWait(DELETE_ALL)
-      assertValidEvent("delete", queryRowCount = 2, currentRow = 1, transactionRowCount = 2, sql = Some(DELETE_ALL))
-      assertValidEvent("delete", queryRowCount = 2, currentRow = 2, transactionRowCount = 2, sql = Some(DELETE_ALL), isLastMutation = true)
+      assertValidEvent("delete", queryRowCount = 2, currentRow = 1, transactionCurrentRow = 1, sql = Some(DELETE_ALL))
+      assertValidEvent("delete", queryRowCount = 2, currentRow = 2, transactionCurrentRow = 2, sql = Some(DELETE_ALL), isLastMutation = true)
     }
   }
 
@@ -71,12 +71,12 @@ class ChangeStreamISpec extends App {
         validateNoEvents
 
         queryAndWait("commit")
-        assertValidEvent("insert", queryRowCount = 1, transactionRowCount = 6, currentRow = 1, sql = Some(INSERT))
-        assertValidEvent("insert", queryRowCount = 1, transactionRowCount = 6, currentRow = 1, sql = Some(INSERT))
-        assertValidEvent("update", queryRowCount = 2, transactionRowCount = 6, currentRow = 1, sql = Some(UPDATE_ALL))
-        assertValidEvent("update", queryRowCount = 2, transactionRowCount = 6, currentRow = 2, sql = Some(UPDATE_ALL))
-        assertValidEvent("delete", queryRowCount = 2, transactionRowCount = 6, currentRow = 1, sql = Some(DELETE_ALL))
-        assertValidEvent("delete", queryRowCount = 2, transactionRowCount = 6, currentRow = 2, sql = Some(DELETE_ALL), isLastMutation = true)
+        assertValidEvent("insert", queryRowCount = 1, transactionCurrentRow = 1, currentRow = 1, sql = Some(INSERT))
+        assertValidEvent("insert", queryRowCount = 1, transactionCurrentRow = 2, currentRow = 1, sql = Some(INSERT))
+        assertValidEvent("update", queryRowCount = 2, transactionCurrentRow = 3, currentRow = 1, sql = Some(UPDATE_ALL))
+        assertValidEvent("update", queryRowCount = 2, transactionCurrentRow = 4, currentRow = 2, sql = Some(UPDATE_ALL))
+        assertValidEvent("delete", queryRowCount = 2, transactionCurrentRow = 5, currentRow = 1, sql = Some(DELETE_ALL))
+        assertValidEvent("delete", queryRowCount = 2, transactionCurrentRow = 6, currentRow = 2, sql = Some(DELETE_ALL), isLastMutation = true)
       }
     }
 
