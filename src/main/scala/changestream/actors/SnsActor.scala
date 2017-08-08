@@ -41,7 +41,13 @@ class SnsActor(config: Config = ConfigFactory.load().getConfig("changestream")) 
   protected val snsTopic = config.getString("aws.sns.topic")
   protected val snsTopicHasVariable = snsTopic.contains("{")
 
-  protected val client = new AmazonSNSScalaClient(new AmazonSNSAsyncClient())
+  protected val client = new AmazonSNSScalaClient(
+    AmazonSNSAsyncClient.
+      asyncBuilder().
+      withRegion(config.getString("aws.region")).
+      build().
+      asInstanceOf[AmazonSNSAsyncClient]
+  )
   protected val topicArns = mutable.HashMap.empty[String, Future[CreateTopicResult]]
 
   def receive = {
