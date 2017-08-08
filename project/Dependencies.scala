@@ -19,7 +19,7 @@ object Dependencies {
     "io.spray" %% "spray-can" % sprayVersion,
     "io.spray" %% "spray-routing" % sprayVersion,
     // mysql
-    "com.github.shyiko" % "mysql-binlog-connector-java" % "0.6.0",
+    "com.github.shyiko" % "mysql-binlog-connector-java" % "0.13.0",
     "com.github.mauricio" %% "mysql-async" % "0.2.21",
     // json formatter
     "io.spray" %%  "spray-json" % "1.3.3",
