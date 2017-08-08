@@ -26,7 +26,7 @@ object Dependencies {
     // event emitter
     "com.amazonaws" % "aws-java-sdk-sqs" % awsVersion,
     "com.amazonaws" % "aws-java-sdk-sns" % awsVersion,
-    "com.github.dwhjames" %% "aws-wrap" % "0.9.1"
+    "com.github.dwhjames" %% "aws-wrap" % "0.12.1"
   )
 
   val testDependencies = Seq(
