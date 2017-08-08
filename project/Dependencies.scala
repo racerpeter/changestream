@@ -2,7 +2,7 @@ import sbt._
 
 object Dependencies {
   // Versions
-  lazy val akkaVersion = "2.4.19"
+  lazy val akkaVersion = "2.5.3"
   lazy val awsVersion = "1.11.172"
   lazy val sprayVersion = "1.3.4"
 
