@@ -19,8 +19,15 @@ RUN \
   dpkg -i sbt-$SBT_VERSION.deb && \
   rm sbt-$SBT_VERSION.deb && \
   apt-get update && \
-  apt-get install sbt && \
-  sbt sbtVersion
+  apt-get install --no-install-recommends -y --force-yes sbt && \
+  sbt sbtVersion && \
+  apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install git
+RUN \
+  apt-get update && \
+  apt-get install --no-install-recommends -y --force-yes git && \
+  apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Define working directory
 WORKDIR /root
