@@ -12,61 +12,61 @@ jobs:
           MYSQL_DATABASE: "mavenlink_test"
           MYSQL_USER: "changestream"
           MYSQL_PASSWORD: "changestreampass"
-  environment:
-    SBT_OPTS: "-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
-    MYSQL_USER: "changestream"
-    MYSQL_PASS: "changestreampass"
-    SQS_QUEUE_NAME: "__circle-firehose"
-    SNS_TOPIC_NAME: "__circle-firehose"
-  parallel: 1
-  resource_class: large
-  working_directory: /root/current
+    environment:
+      SBT_OPTS: "-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
+      MYSQL_USER: "changestream"
+      MYSQL_PASS: "changestreampass"
+      SQS_QUEUE_NAME: "__circle-firehose"
+      SNS_TOPIC_NAME: "__circle-firehose"
+    parallel: 1
+    resource_class: large
+    working_directory: /root/current
 
-  steps:
-    - restore_cache:
-        key: changestream-source-v1-{{ .Branch }}-
-    - checkout
-    - save_cache:
-        key: changestream-source-v1-{{ .Branch }}-{{ epoch }}
-        paths:
-          - /root/current
-    - restore_cache:
-        key: changestream-cache-v1-{{ .Branch }}-
-    - run:
-        name: Unit Tests
-        command: sbt test
-    - run:
-        name: Integration Tests
-        command: sbt it:test
-    - save_cache:
-        key: changestream-cache-v1-{{ .Branch }}-{{ epoch }}
-        paths:
-          - "/root/.ivy2"
-          - "/root/.sbt"
-          - "/root/current/target/resolution-cache"
-          - "/root/current/target/streams"
-          - "/root/current/project/target/resolution-cache"
-          - "/root/current/project/target/streams"
-    - run:
-        name: Build Debian Package
-        command: sbt debian:packageBin
-    - run:
-        name: Build Docker Image
-        command: sbt docker
-    - deploy:
-        name: Deploy to DockerHub
-        run: |
-          if [ "${CIRCLE_BRANCH}" == "master" ]; then
-            docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
-            docker tag mavenlink/changestream mavenlink/changestream:$CIRCLE_SHA1
-            docker push mavenlink/changestream:$CIRCLE_SHA1
-          fi
-    - run:
-        name: Collect Test Reports
-        command: |
-          mkdir -p /tmp/junit
-          find . -type f -regex ".*/target/test-reports/.*xml" -exec cp {} /tmp/junit/ \;
-    - store_artifacts:
-        path: /root/current/target
-    - store_test_results:
-        path: /tmp/junit
+    steps:
+      - restore_cache:
+          key: changestream-source-v1-{{ .Branch }}-
+      - checkout
+      - save_cache:
+          key: changestream-source-v1-{{ .Branch }}-{{ epoch }}
+          paths:
+            - /root/current
+      - restore_cache:
+          key: changestream-cache-v1-{{ .Branch }}-
+      - run:
+          name: Unit Tests
+          command: sbt test
+      - run:
+          name: Integration Tests
+          command: sbt it:test
+      - save_cache:
+          key: changestream-cache-v1-{{ .Branch }}-{{ epoch }}
+          paths:
+            - "/root/.ivy2"
+            - "/root/.sbt"
+            - "/root/current/target/resolution-cache"
+            - "/root/current/target/streams"
+            - "/root/current/project/target/resolution-cache"
+            - "/root/current/project/target/streams"
+      - run:
+          name: Build Debian Package
+          command: sbt debian:packageBin
+      - run:
+          name: Build Docker Image
+          command: sbt docker
+      - deploy:
+          name: Deploy to DockerHub
+          run: |
+            if [ "${CIRCLE_BRANCH}" == "master" ]; then
+              docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+              docker tag mavenlink/changestream mavenlink/changestream:$CIRCLE_SHA1
+              docker push mavenlink/changestream:$CIRCLE_SHA1
+            fi
+      - run:
+          name: Collect Test Reports
+          command: |
+            mkdir -p /tmp/junit
+            find . -type f -regex ".*/target/test-reports/.*xml" -exec cp {} /tmp/junit/ \;
+      - store_artifacts:
+          path: /root/current/target
+      - store_test_results:
+          path: /tmp/junit
