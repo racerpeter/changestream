@@ -5,7 +5,7 @@ jobs:
     docker:
       - image: mavenlink/changestream-build:20170808c
       - image: mysql:5.7
-        command: [mysqld, --character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci, --log-bin=mysql-bin, --binlog_format=row, --binlog_rows_query_log_events, --server-id=952, --expire_logs_days=1, --init-connect="GRANT REPLICATION SLAVE ON *.* TO 'changestream'@'%';GRANT ALL ON *.* TO 'changestream'@'%';FLUSH PRIVILEGES"]
+        command: [mysqld, --character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci, --log-bin=mysql-bin, --binlog_format=row, --binlog_rows_query_log_events, --server-id=952, --expire_logs_days=1]
         environment:
           MYSQL_ALLOW_EMPTY_PASSWORD: "true"
           MYSQL_ROOT_HOST: "%"
@@ -24,6 +24,10 @@ jobs:
     working_directory: /root/current
 
     steps:
+      - run:
+          name: DB Setup
+          command: |
+            echo "GRANT REPLICATION SLAVE ON *.* TO 'changestream'@'%';GRANT ALL ON *.* TO 'changestream'@'%';FLUSH PRIVILEGES;" | mysql -uroot
       - restore_cache:
           key: changestream-source-v1-{{ .Branch }}-
       - checkout
