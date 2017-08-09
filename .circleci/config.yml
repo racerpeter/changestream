@@ -9,7 +9,7 @@ jobs:
         environment:
           MYSQL_ALLOW_EMPTY_PASSWORD: "true"
           MYSQL_ROOT_HOST: "%"
-          MYSQL_DATABASE: "mavenlink_test"
+          MYSQL_DATABASE: "changestream_test"
           MYSQL_USER: "changestream"
           MYSQL_PASSWORD: "changestreampass"
     environment:
