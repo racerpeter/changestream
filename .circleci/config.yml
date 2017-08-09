@@ -33,6 +33,9 @@ jobs:
       - restore_cache:
           key: changestream-cache-v1-{{ .Branch }}-
       - run:
+          name: Compile
+          command: sbt compile
+      - run:
           name: Unit Tests
           command: sbt test
       - run:
