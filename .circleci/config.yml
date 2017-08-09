@@ -55,7 +55,7 @@ jobs:
           command: sbt docker
       - deploy:
           name: Deploy to DockerHub
-          run: |
+          command: |
             if [ "${CIRCLE_BRANCH}" == "master" ]; then
               docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
               docker tag mavenlink/changestream mavenlink/changestream:$CIRCLE_SHA1
