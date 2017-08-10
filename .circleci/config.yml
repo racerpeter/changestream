@@ -39,6 +39,7 @@ jobs:
           command: |
             export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
             sbt compile test:compile it:compile exit
+            rm -rf /root/current/.git
       - save_cache:
           key: changestream-cache-v1-{{ .Branch }}-{{ epoch }}
           paths:
@@ -57,7 +58,7 @@ jobs:
     <<: *defaults
     steps:
       - attach_workspace:
-          at: /root/current
+          at: /root
       - run:
           name: Unit Tests
           command: sbt test
@@ -68,7 +69,7 @@ jobs:
     <<: *defaults
     steps:
       - attach_workspace:
-          at: /root/current
+          at: /root
       - run:
           name: Integration Tests
           command: sbt it:test
@@ -87,7 +88,7 @@ jobs:
           MYSQL_DATABASE: "changestream_test"
     steps:
       - attach_workspace:
-          at: /root/current
+          at: /root
       - run:
           name: Integration Tests
           command: sbt it:test
@@ -100,7 +101,7 @@ jobs:
       - image: mavenlink/changestream-build:20170809c
     steps:
       - attach_workspace:
-          at: /root/current
+          at: /root
       - run:
           name: Build Debian Package
           command: |
