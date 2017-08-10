@@ -3,7 +3,7 @@ executorType: docker
 jobs:
   build:
     docker:
-      - image: mavenlink/changestream-build:20170809a
+      - image: mavenlink/changestream-build:20170809b
       - image: mysql/mysql-server:5.7
         command: [mysqld, --character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci, --log-bin=mysql-bin, --binlog_format=row, --binlog_rows_query_log_events, --server-id=952, --expire_logs_days=1]
         environment:
@@ -60,6 +60,7 @@ jobs:
           command:  |
             export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
             sbt docker
+      - setup_remote_docker
       - deploy:
           name: Deploy to DockerHub
           command: |

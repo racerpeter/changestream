@@ -29,5 +29,11 @@ RUN \
   apt-get install --no-install-recommends -y --force-yes git ssh fakeroot && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Install docker
+RUN \
+  apt-get update && \
+  apt-get install --no-install-recommends -y --force-yes docker && \
+  apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Define working directory
 WORKDIR /root
