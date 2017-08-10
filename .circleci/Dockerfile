@@ -31,9 +31,10 @@ RUN \
 
 # Install docker
 RUN \
-  apt-get update && \
-  apt-get install --no-install-recommends -y --force-yes docker && \
-  apt-get clean && rm -rf /var/lib/apt/lists/*
+  VER="17.03.0-ce" && \
+  curl -L -o /tmp/docker-$VER.tgz https://get.docker.com/builds/Linux/x86_64/docker-$VER.tgz && \
+  tar -xz -C /tmp -f /tmp/docker-$VER.tgz && \
+  mv /tmp/docker/* /usr/bin
 
 # Define working directory
 WORKDIR /root
