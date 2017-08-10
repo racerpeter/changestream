@@ -16,6 +16,7 @@ defaults: &defaults
     MYSQL_PASS: "password"
     SQS_QUEUE_NAME: "__circle-firehose"
     SNS_TOPIC_NAME: "__circle-firehose"
+    SBT_OPTS: "-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled"
 
 version: 2
 executorType: docker
@@ -37,7 +38,6 @@ jobs:
       - run:
           name: Compile
           command: |
-            export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
             sbt compile test:compile it:compile exit
             rm -rf /root/current/.git
       - save_cache:
@@ -53,6 +53,8 @@ jobs:
           root: /root
           paths:
             - current
+            - ".ivy2"
+            - ".sbt"
 
   unit-tests:
     <<: *defaults
@@ -62,7 +64,6 @@ jobs:
       - run:
           name: Unit Tests
           command: |
-            export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
             sbt test
       - store_test_results:
           path: /root/current/target/test-reports
@@ -75,7 +76,6 @@ jobs:
       - run:
           name: Integration Tests
           command: |
-            export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
             sbt it:test
       - store_test_results:
           path: /root/current/target/test-reports
@@ -96,7 +96,6 @@ jobs:
       - run:
           name: Integration Tests
           command: |
-            export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
             sbt it:test
       - store_test_results:
           path: /root/current/target/test-reports
@@ -111,7 +110,6 @@ jobs:
       - run:
           name: Build Debian Package
           command: |
-            export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
             sbt debian:packageBin
             mkdir -p /tmp/circle/
             cp /root/current/target/*.deb /tmp/circle/
@@ -119,18 +117,15 @@ jobs:
       - run:
           name: Build Docker Image
           command:  |
-            export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
             sbt docker
             mkdir -p /tmp/circle/
             cp /root/current/target/docker/Dockerfile /tmp/circle/
       - deploy:
           name: Deploy to DockerHub
           command: |
-            if [ "${CIRCLE_BRANCH}" == "master" ]; then
-              docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
-              docker tag mavenlink/changestream mavenlink/changestream:$CIRCLE_SHA1
-              docker push mavenlink/changestream:$CIRCLE_SHA1
-            fi
+            docker login -u $DOCKER_USER -p $DOCKER_PASS
+            docker tag mavenlink/changestream mavenlink/changestream:$CIRCLE_SHA1
+            docker push mavenlink/changestream:$CIRCLE_SHA1
       - store_artifacts:
           path: /tmp/circle
 
