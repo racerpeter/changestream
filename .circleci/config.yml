@@ -55,12 +55,16 @@ jobs:
           command: |
             export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
             sbt debian:packageBin
+            mkdir -p /tmp/circle/
+            cp /root/current/target/*.deb /tmp/circle/
       - setup_remote_docker
       - run:
           name: Build Docker Image
           command:  |
             export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
             sbt docker
+            mkdir -p /tmp/circle/
+            cp /root/current/target/docker/Dockerfile /tmp/circle/
       - deploy:
           name: Deploy to DockerHub
           command: |
@@ -70,6 +74,6 @@ jobs:
               docker push mavenlink/changestream:$CIRCLE_SHA1
             fi
       - store_artifacts:
-          path: /root/current/target
+          path: /tmp/circle
       - store_test_results:
           path: /root/current/target/test-reports
