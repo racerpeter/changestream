@@ -57,7 +57,14 @@ class SqsActor(config: Config = ConfigFactory.load().getConfig("changestream")) 
   }
 
   protected val sqsQueue = config.getString("aws.sqs.queue")
-  protected val client = new AmazonSQSScalaClient(new AmazonSQSAsyncClient(), ec)
+  protected val client = new AmazonSQSScalaClient(
+    AmazonSQSAsyncClient.
+      asyncBuilder().
+      withRegion(config.getString("aws.region")).
+      build().
+      asInstanceOf[AmazonSQSAsyncClient],
+    ec
+  )
   protected val queueUrl = client.createQueue(sqsQueue)
   queueUrl.failed.map {
     case exception:Throwable =>

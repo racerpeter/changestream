@@ -1,12 +1,12 @@
-val nextRelease = "0.2.0"
-val scalaVer = "2.11.8"
+val nextRelease = "0.2.1"
+val scalaVer = "2.11.11"
 
 lazy val projectInfo = Seq(
   name := "changestream",
   organization := "mavenlink",
   maintainer := "Mavenlink <oss@mavenlink.com>",
-  packageSummary := "Change Stream",
-  packageDescription := "Streams changes to SQS/Redis from a MySQL Binlog stream"
+  packageSummary := "Changestream",
+  packageDescription := "A stream of changes for MySQL built on Akka"
 )
 
 lazy val changestream = (project in file(".")).
