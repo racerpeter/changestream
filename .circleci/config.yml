@@ -4,20 +4,17 @@ jobs:
   build:
     docker:
       - image: mavenlink/changestream-build:20170808c
-      - image: mavenlink/mysql-replication-slave:5.7-rev3
+      - image: mysql/mysql-server:5.7
         command: [mysqld, --character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci, --log-bin=mysql-bin, --binlog_format=row, --binlog_rows_query_log_events, --server-id=952, --expire_logs_days=1]
         environment:
-          MYSQL_ALLOW_EMPTY_PASSWORD: "true"
+          MYSQL_ROOT_PASSWORD: "password"
           MYSQL_ROOT_HOST: "%"
           MYSQL_DATABASE: "changestream_test"
-          MYSQL_USER: "changestream"
-          MYSQL_PASSWORD: "changestreampass"
-          MYSQL_USER_ENABLE_REPLICATION_CLIENT: "true"
     environment:
       SBT_OPTS: "-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
       MYSQL_HOST: "127.0.0.1"
-      MYSQL_USER: "changestream"
-      MYSQL_PASS: "changestreampass"
+      MYSQL_USER: "root"
+      MYSQL_PASS: "password"
       SQS_QUEUE_NAME: "__circle-firehose"
       SNS_TOPIC_NAME: "__circle-firehose"
     parallel: 1
@@ -36,7 +33,7 @@ jobs:
           key: changestream-cache-v1-{{ .Branch }}-
       - run:
           name: Compile
-          command: sbt compile test:compile
+          command: sbt compile test:compile it:compile
       - run:
           name: Unit Tests
           command: sbt test
@@ -66,12 +63,7 @@ jobs:
               docker tag mavenlink/changestream mavenlink/changestream:$CIRCLE_SHA1
               docker push mavenlink/changestream:$CIRCLE_SHA1
             fi
-      - run:
-          name: Collect Test Reports
-          command: |
-            mkdir -p /tmp/junit
-            find . -type f -regex ".*/target/test-reports/.*xml" -exec cp {} /tmp/junit/ \;
       - store_artifacts:
           path: /root/current/target
       - store_test_results:
-          path: /tmp/junit
+          path: /root/current/target/test-reports
