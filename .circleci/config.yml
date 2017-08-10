@@ -49,17 +49,15 @@ jobs:
             - "/root/current/project/target/resolution-cache"
             - "/root/current/project/target/streams"
       - persist_to_workspace:
-          root: /root/current/target
+          root: /root
           paths:
-            - resolution-cache
-            - scala-2.11
-            - streams
+            - current
 
   unit-tests:
     <<: *defaults
     steps:
       - attach_workspace:
-          at: /root/current/target
+          at: /root/current
       - run:
           name: Unit Tests
           command: sbt test
@@ -70,7 +68,7 @@ jobs:
     <<: *defaults
     steps:
       - attach_workspace:
-          at: /root/current/target
+          at: /root/current
       - run:
           name: Integration Tests
           command: sbt it:test
@@ -89,7 +87,7 @@ jobs:
           MYSQL_DATABASE: "changestream_test"
     steps:
       - attach_workspace:
-          at: /root/current/target
+          at: /root/current
       - run:
           name: Integration Tests
           command: sbt it:test
@@ -102,7 +100,7 @@ jobs:
       - image: mavenlink/changestream-build:20170809c
     steps:
       - attach_workspace:
-          at: /root/current/target
+          at: /root/current
       - run:
           name: Build Debian Package
           command: |
