@@ -1,25 +1,29 @@
+defaults: &defaults
+  parallel: 1
+  resource_class: large
+  working_directory: /root/current
+  docker:
+    - image: mavenlink/changestream-build:20170809c
+    - image: mysql/mysql-server:5.7
+      command: [mysqld, --character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci, --log-bin=mysql-bin, --binlog_format=row, --binlog_rows_query_log_events, --server-id=952, --expire_logs_days=1]
+      environment:
+        MYSQL_ROOT_PASSWORD: "password"
+        MYSQL_ROOT_HOST: "%"
+        MYSQL_DATABASE: "changestream_test"
+  environment:
+    MYSQL_HOST: "127.0.0.1"
+    MYSQL_USER: "root"
+    MYSQL_PASS: "password"
+    SQS_QUEUE_NAME: "__circle-firehose"
+    SNS_TOPIC_NAME: "__circle-firehose"
+
 version: 2
 executorType: docker
 jobs:
   build:
+    <<: *defaults
     docker:
       - image: mavenlink/changestream-build:20170809c
-      - image: mysql/mysql-server:5.7
-        command: [mysqld, --character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci, --log-bin=mysql-bin, --binlog_format=row, --binlog_rows_query_log_events, --server-id=952, --expire_logs_days=1]
-        environment:
-          MYSQL_ROOT_PASSWORD: "password"
-          MYSQL_ROOT_HOST: "%"
-          MYSQL_DATABASE: "changestream_test"
-    environment:
-      MYSQL_HOST: "127.0.0.1"
-      MYSQL_USER: "root"
-      MYSQL_PASS: "password"
-      SQS_QUEUE_NAME: "__circle-firehose"
-      SNS_TOPIC_NAME: "__circle-firehose"
-    parallel: 1
-    resource_class: large
-    working_directory: /root/current
-
     steps:
       - restore_cache:
           key: changestream-source-v1-{{ .Branch }}-
@@ -35,12 +39,6 @@ jobs:
           command: |
             export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
             sbt compile test:compile it:compile exit
-      - run:
-          name: Unit Tests
-          command: sbt test
-      - run:
-          name: Integration Tests
-          command: sbt it:test
       - save_cache:
           key: changestream-cache-v1-{{ .Branch }}-{{ epoch }}
           paths:
@@ -50,6 +48,61 @@ jobs:
             - "/root/current/target/streams"
             - "/root/current/project/target/resolution-cache"
             - "/root/current/project/target/streams"
+      - persist_to_workspace:
+          root: /root/current/target
+          paths:
+            - resolution-cache
+            - scala-2.11
+            - streams
+
+  unit-tests:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: /root/current/target
+      - run:
+          name: Unit Tests
+          command: sbt test
+      - store_test_results:
+          path: /root/current/target/test-reports
+
+  integration-tests:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: /root/current/target
+      - run:
+          name: Integration Tests
+          command: sbt it:test
+      - store_test_results:
+          path: /root/current/target/test-reports
+
+  integration-tests-gtid:
+    <<: *defaults
+    docker:
+      - image: mavenlink/changestream-build:20170809c
+      - image: mysql/mysql-server:5.7
+        command: [mysqld, --character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci, --log-bin=mysql-bin, --gtid_mode=on, --log-slave-updates, --enforce-gtid-consistency, --binlog_format=row, --binlog_rows_query_log_events, --server-id=952, --expire_logs_days=1]
+        environment:
+          MYSQL_ROOT_PASSWORD: "password"
+          MYSQL_ROOT_HOST: "%"
+          MYSQL_DATABASE: "changestream_test"
+    steps:
+      - attach_workspace:
+          at: /root/current/target
+      - run:
+          name: Integration Tests
+          command: sbt it:test
+      - store_test_results:
+          path: /root/current/target/test-reports
+
+  deploy:
+    <<: *defaults
+    docker:
+      - image: mavenlink/changestream-build:20170809c
+    steps:
+      - attach_workspace:
+          at: /root/current/target
       - run:
           name: Build Debian Package
           command: |
@@ -75,6 +128,26 @@ jobs:
             fi
       - store_artifacts:
           path: /tmp/circle
-      - store_test_results:
-          path: /root/current/target/test-reports
 
+workflows:
+  version: 2
+  build_test_deploy:
+    jobs:
+      - build
+      - unit-tests:
+          requires:
+            - build
+      - integration-tests:
+          requires:
+            - build
+      - integration-tests-gtid:
+          requires:
+            - build
+      - deploy:
+          filters:
+            branches:
+              only: master
+          requires:
+            - unit-tests
+            - integration-tests
+            - integration-tests-gtid
