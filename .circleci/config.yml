@@ -11,7 +11,6 @@ jobs:
           MYSQL_ROOT_HOST: "%"
           MYSQL_DATABASE: "changestream_test"
     environment:
-      SBT_OPTS: "-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
       MYSQL_HOST: "127.0.0.1"
       MYSQL_USER: "root"
       MYSQL_PASS: "password"
@@ -33,7 +32,9 @@ jobs:
           key: changestream-cache-v1-{{ .Branch }}-
       - run:
           name: Compile
-          command: sbt compile test:compile it:compile
+          command: |
+            export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
+            sbt compile test:compile it:compile exit
       - run:
           name: Unit Tests
           command: sbt test
@@ -51,10 +52,14 @@ jobs:
             - "/root/current/project/target/streams"
       - run:
           name: Build Debian Package
-          command: sbt debian:packageBin
+          command: |
+            export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
+            sbt debian:packageBin
       - run:
           name: Build Docker Image
-          command: sbt docker
+          command:  |
+            export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
+            sbt docker
       - deploy:
           name: Deploy to DockerHub
           command: |
