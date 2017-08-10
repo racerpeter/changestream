@@ -53,8 +53,6 @@ jobs:
           root: /root
           paths:
             - current
-            - ".ivy2"
-            - ".sbt"
 
   unit-tests:
     <<: *defaults
@@ -63,7 +61,9 @@ jobs:
           at: /root
       - run:
           name: Unit Tests
-          command: sbt test
+          command: |
+            export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
+            sbt test
       - store_test_results:
           path: /root/current/target/test-reports
 
@@ -74,7 +74,9 @@ jobs:
           at: /root
       - run:
           name: Integration Tests
-          command: sbt it:test
+          command: |
+            export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
+            sbt it:test
       - store_test_results:
           path: /root/current/target/test-reports
 
@@ -93,7 +95,9 @@ jobs:
           at: /root
       - run:
           name: Integration Tests
-          command: sbt it:test
+          command: |
+            export SBT_OPTS="-Xms512M -Xmx1536M -Xss1M -XX:+CMSClassUnloadingEnabled -Dversion=$CIRCLE_SHA1-$CIRCLE_BUILD_NUM"
+            sbt it:test
       - store_test_results:
           path: /root/current/target/test-reports
 
