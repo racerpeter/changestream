@@ -26,7 +26,7 @@ RUN \
 # Install git
 RUN \
   apt-get update && \
-  apt-get install --no-install-recommends -y --force-yes git ssh && \
+  apt-get install --no-install-recommends -y --force-yes git ssh fakeroot && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Define working directory
