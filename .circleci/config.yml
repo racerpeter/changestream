@@ -53,6 +53,8 @@ jobs:
           root: /root
           paths:
             - current
+            - ".ivy2"
+            - ".sbt"
 
   unit-tests:
     <<: *defaults
