@@ -23,8 +23,6 @@ object ChangeStreamEventListener extends EventListener {
   protected lazy val columnInfoActor = system.actorOf(Props(new ColumnInfoActor(_ => formatterActor)), name = "columnInfoActor")
   protected lazy val transactionActor = system.actorOf(Props(new TransactionActor(_ => columnInfoActor)), name = "transactionActor")
 
-  setConfig(ConfigFactory.load().getConfig("changestream"))
-
   /** Allows the configuration for the listener object to be set on startup.
     * The listener will look for whitelist, blacklist, and emitter settings.
     *
