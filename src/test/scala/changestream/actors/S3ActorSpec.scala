@@ -72,7 +72,7 @@ class S3ActorSpec extends Emitter with Config {
     }
   }
 
-  "When SqsActor receives an invalid message" should {
+  "When S3Actor receives an invalid message" should {
     "Return a failure message, and throw an exception" in {
       actorRef ! INVALID_MESSAGE
 
