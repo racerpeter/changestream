@@ -5,7 +5,7 @@
 # Changestream
 Changestream sources object-level change events from a [MySQL Replication Master](http://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html) (configured for [row-based replication](http://dev.mysql.com/doc/refman/5.7/en/replication-rbr-usage.html)) by streaming the [MySQL binlog](https://dev.mysql.com/doc/internals/en/binary-log.html) and transforming change events into JSON strings that can be published anywhere.
 
-Currently, [Amazon Simple Queuing Service (SQS)](https://aws.amazon.com/sqs/) and [Amazon Simple Notification Service](https://aws.amazon.com/sns/) are supported with optional message encryption via AES.
+Currently, [Amazon Simple Queuing Service (SQS)](https://aws.amazon.com/sqs/), [Amazon Simple Notification Service](https://aws.amazon.com/sns/) and [Amazon S3](https://aws.amazon.com/s3/) are supported with optional client-side message encryption via AES.
 
 ## Why SNS+SQS?
 For anyone who is unfamilar with the technology, [Fabrizio Branca](https://github.com/fbrnc) has some great reading on [the differences between SNS, SQS, and Kenesis](http://fbrnc.net/blog/2016/03/messaging-on-aws).
@@ -18,7 +18,6 @@ SQS and/or SNS is trusted by many companies:
 - [Unbounce](http://inside.unbounce.com/product-dev/aws-messaging-patterns/)
 - [Kapost](http://engineering.kapost.com/2015/07/decoupling-ruby-applications-with-amazon-sns-sqs/)
 - [Mavenlink](https://www.mavenlink.com/careers) (In Development)
-
 
 ## How do I Consume My Events?
 There are several great options here, and I'll share a few (Ruby-based) examples that we've run across in the course of building Changestream:
@@ -108,7 +107,7 @@ export MYSQL_PASS=changestreampass
 ```
 
 #### Emitter Configuration
-If you would like to override the default emitter (`SnsActor`), you can do so by setting `changestream.emitter` or the `EMITTER` environment variable to the fully qualified class name (for example, `changestream.actors.StdoutActor`).
+If you would like to override the default emitter (`StdoutActor`), you can do so by setting `changestream.emitter` or the `EMITTER` environment variable to the fully qualified class name (for example, `changestream.actors.SnsActor`).
 
 To configure the SNS emitter, you must [provide AWS credentials](http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html#config-settings-and-precedence), and configure `changestream.aws.sns.topic`.
 
@@ -120,28 +119,25 @@ You can build and run Changestream using the [SBT CLI](http://www.scala-sbt.org/
 $ sbt run
 ```
 
-#### IntelliJ
-If you are planning to do development on Changestream, you can open the project using [IntelliJ](https://www.jetbrains.com/idea/). Changestream provides valid build, test and run (with debug!) configurations via the `.idea` folder.
-
-## Production Deployment
-There are several ways to get changestream running in your production environment. The easiest is...
-
-### Docker (requires a docker host to build)
+#### Build Docker Image (requires a docker host to build)
 Note: The Dockerfile will be written to `target/docker/Dockerfile`, and the docker image will be added to your local docker repo.
 
 ```
 $ sbt docker
 ```
 
-### Debian (requires `dpkg-deb`, written to `target/*.deb`)
+#### Build Debian Package (requires `dpkg-deb`, written to `target/*.deb`)
 ```
 $ sbt debian:packageBin
 ```
 
-### Jar Packages (written to `target/scala-2.11/*.jar`)
+#### Build Jar Package (written to `target/scala-2.11/*.jar`)
 ```
 $ sbt package
 ```
+
+#### IntelliJ
+If you are planning to do development on Changestream, you can open the project using [IntelliJ](https://www.jetbrains.com/idea/). Changestream provides valid build, test and run (with debug!) configurations via the `.idea` folder.
 
 ## The Stack
 Changestream is designed to be fast, stable and massively scalable, so it is built on:
@@ -150,8 +146,8 @@ Changestream is designed to be fast, stable and massively scalable, so it is bui
 - **[shyiko/mysql-binlog-connector-java](https://github.com/shyiko/mysql-binlog-connector-java)** by [Stanley Shyiko](https://github.com/shyiko) to consume the raw MySQL binlog (did I mention its awesome, [and stable too!](http://devs.mailchimp.com/blog/powering-mailchimp-pro-reporting))
 - **[mauricio/postgresql-async](https://github.com/mauricio/postgresql-async)** Async, Netty based, database drivers for PostgreSQL and MySQL written in Scala, by [Maurício Linhares](https://github.com/mauricio)
 - **[AWS Java SDK](https://aws.amazon.com/sdk-for-java/)**
-- **[dwhjames/aws-wrap](https://github.com/dwhjames/aws-wrap)** Asynchronous Scala Clients for Amazon Web Services by [Daniel James](https://github.com/dwhjames)
 - **[spray/spray-json](https://github.com/spray/spray-json)** A lightweight, clean and simple JSON implementation in Scala. Used by [Spray](http://spray.io/)/[akka-http](http://doc.akka.io/docs/akka/current/scala.html)
+- **[mingchuno/aws-wrap](https://github.com/mingchuno/aws-wrap)** Asynchronous Scala Clients for Amazon Web Services by [Daniel James](https://github.com/dwhjames), maintained by [mingchuno](https://github.com/mingchuno)
 
 
 ## Architecture
@@ -197,13 +193,17 @@ setting is stringified via the `compactPrint` method, encrypted, base64 encoded,
 value. The new `JsObject` with encrypted fields is then returned to `sender()`.
 
 #### SnsActor
-The `SnsActor` manages a connection to Amazon SNS, and emits JSON-formatted change events to a configurable SNS topic. 
-This publisher is ideal if you wish to leverage SNS for 
+The `SnsActor` manages a pool of connections to Amazon SNS, and emits formatted change events to a configurable
+SNS topic. This publisher is ideal if you wish to leverage SNS for
 [Fan-out](http://docs.aws.amazon.com/sns/latest/dg/SNS_Scenarios.html) to many queues.
 
 #### SqsActor
-The `SqsActor` manages a pool of connections to Amazon SQS, and emits JSON-formatted change events to a configurable SQS 
+The `SqsActor` manages a pool of connections to Amazon SQS, and emits formatted change events to a configurable SQS
 queue. This publisher is ideal if you intend to have a single service consuming events from Changestream.
+
+#### S3Actor
+The `S3Actor` buffers formatted change events, and emits them in batches to S3 on a configurable interval and batch
+size. This publisher can be used with Amazon Athena to easily access and query an audit log of database changes.
 
 #### StdoutActor
 The `StdoutActor` is primarily included for debugging and example purposes, and simply prints the stringified mutation 
@@ -352,7 +352,7 @@ In order to enable features such as string interpolation for the configured topi
 Changestream is built against
 
 - Scala 2.11
-- Akka 2.4
+- Akka 2.5
 - SBT 0.13
 - MySQL 5.7 (5.5+ supported)
 

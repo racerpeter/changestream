@@ -7,7 +7,7 @@ import com.github.shyiko.mysql.binlog.event._
 import com.github.shyiko.mysql.binlog.BinaryLogClient.EventListener
 import com.github.shyiko.mysql.binlog.event.EventType._
 import org.slf4j.LoggerFactory
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.Config
 
 object ChangeStreamEventListener extends EventListener {
   protected val log = LoggerFactory.getLogger(getClass)
@@ -17,13 +17,11 @@ object ChangeStreamEventListener extends EventListener {
   protected val whitelist: java.util.List[String] = new java.util.LinkedList[String]()
   protected val blacklist: java.util.List[String] = new java.util.LinkedList[String]()
 
-  @volatile protected var emitterLoader: (ActorRefFactory => ActorRef) = (_ => system.actorOf(Props(new SnsActor()), name = "emitterActor"))
+  @volatile protected var emitterLoader: (ActorRefFactory => ActorRef) = (_ => system.actorOf(Props(new StdoutActor()), name = "emitterActor"))
 
   protected lazy val formatterActor = system.actorOf(Props(new JsonFormatterActor(emitterLoader)), name = "formatterActor")
   protected lazy val columnInfoActor = system.actorOf(Props(new ColumnInfoActor(_ => formatterActor)), name = "columnInfoActor")
   protected lazy val transactionActor = system.actorOf(Props(new TransactionActor(_ => columnInfoActor)), name = "transactionActor")
-
-  setConfig(ConfigFactory.load().getConfig("changestream"))
 
   /** Allows the configuration for the listener object to be set on startup.
     * The listener will look for whitelist, blacklist, and emitter settings.

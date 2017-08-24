@@ -26,6 +26,7 @@ object Dependencies {
     // event emitter
     "com.amazonaws" % "aws-java-sdk-sqs" % awsVersion,
     "com.amazonaws" % "aws-java-sdk-sns" % awsVersion,
+    "com.amazonaws" % "aws-java-sdk-s3" % awsVersion,
     "com.github.dwhjames" %% "aws-wrap" % "0.12.1"
   )
 
