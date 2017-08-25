@@ -53,9 +53,8 @@ object ChangeStreamEventListener extends EventListener {
         })
       }
       catch {
-        case e: Exception =>
-          log.error(s"Couldn't load emitter class ${classString}.", e)
-          throw e
+        case e: ClassNotFoundException =>
+          log.error(s"Couldn't load emitter class ${classString} (ClassNotFoundException), using the default emitter.")
       }
     }
   }
