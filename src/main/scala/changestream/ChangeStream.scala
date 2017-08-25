@@ -136,8 +136,7 @@ object ChangeStream extends App {
       }
       catch {
         case e: IOException =>
-          log.error(e.getMessage)
-          log.error("Failed to connect to MySQL to stream the binlog, retrying...")
+          log.error("Failed to connect to MySQL to stream the binlog, retrying...", e)
           Thread.sleep(5000)
         case e: Exception =>
           log.error("Failed to connect, exiting.", e)
