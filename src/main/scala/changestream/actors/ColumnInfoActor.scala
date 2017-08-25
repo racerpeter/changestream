@@ -65,10 +65,10 @@ class ColumnInfoActor (
 
     connectRequest onComplete {
       case Success(result) =>
-        log.info("Connected to MySQL server for Metadata!!")
+        log.info("Connected to MySQL server for Metadata!")
 
       case Failure(exception) =>
-        log.error("Could not connect to MySQL server for Metadata", exception)
+        log.error(s"Could not connect to MySQL server for Metadata: ${exception.getMessage}")
         throw exception
     }
 
@@ -171,7 +171,7 @@ class ColumnInfoActor (
       val request = for {
         columnsInfo <- getAllColumnsInfo recover {
           case exception =>
-            log.error(s"Couldn't fetch metadata for databases: ${preloadDatabases}", exception)
+            log.error(s"Couldn't fetch metadata for databases: ${preloadDatabases}")
             throw exception
         }
       } yield columnsInfo.foreach {
