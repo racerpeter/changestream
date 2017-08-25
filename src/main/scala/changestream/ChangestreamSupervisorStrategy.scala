@@ -3,6 +3,7 @@ package changestream
 import akka.actor.SupervisorStrategy.{Escalate, Restart}
 import akka.actor.{OneForOneStrategy, SupervisorStrategy, SupervisorStrategyConfigurator}
 import com.github.mauricio.async.db.mysql.exceptions.MySQLException
+import scala.language.postfixOps
 import scala.concurrent.duration._
 
 final class ChangestreamSupervisorStrategy extends SupervisorStrategyConfigurator {

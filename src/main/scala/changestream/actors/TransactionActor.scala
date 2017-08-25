@@ -61,8 +61,5 @@ class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
       mutationCount = 1
       currentGtid = None
       previousMutation = None
-
-    case _ =>
-      throw new Exception("Invalid message received by TransactionActor")
   }
 }

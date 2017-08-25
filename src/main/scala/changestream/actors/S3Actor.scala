@@ -25,7 +25,7 @@ object S3Actor {
 }
 
 class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
-  import S3Actor._
+  import S3Actor.FlushRequest
 
   protected val log = LoggerFactory.getLogger(getClass)
   protected implicit val ec = context.dispatcher
@@ -78,12 +78,12 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
   protected val testPutFuture = putString("test.txt", "test")
   testPutFuture.failed.map {
     case exception:Throwable =>
-      log.error(s"Failed to create test object in S3 bucket ${BUCKET} at key ${KEY_PREFIX}test.txt.", exception)
+      log.error(s"Failed to create test object in S3 bucket ${BUCKET} at key ${KEY_PREFIX}test.txt: ${exception.getMessage}")
       throw exception
   }
 
   override def preStart() = {
-    val url = Await.result(testPutFuture, TIMEOUT milliseconds)
+    Await.result(testPutFuture, TIMEOUT milliseconds)
     log.info(s"Ready to push messages to bucket ${BUCKET} with key prefix ${KEY_PREFIX}")
   }
   override def postStop() = {
@@ -105,10 +105,6 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
 
     case FlushRequest(origSender) =>
       flush(origSender)
-
-    case _ =>
-      log.error("Received invalid message")
-      sender() ! akka.actor.Status.Failure(new Exception("Received invalid message"))
   }
 
   protected def flush(origSender: ActorRef) = {
@@ -126,8 +122,8 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
         log.info(s"Successfully saved ${messageCount} messages to ${s3Url}.")
         origSender ! akka.actor.Status.Success(s3Url)
       case Failure(exception) =>
-        log.error(s"Failed to save ${messageCount} messages to ${s3Url}.", exception)
-        origSender ! akka.actor.Status.Failure(exception)
+        log.error(s"Failed to save ${messageCount} messages to ${s3Url}: ${exception.getMessage}")
+        throw exception
     }
   }
 }
