@@ -36,12 +36,6 @@ class ColumnInfoActor (
   import ColumnInfoActor._
   import context.dispatcher
 
-  override val supervisorStrategy =
-    OneForOneStrategy(loggingEnabled = true) {
-      case _: MySQLException => Restart
-      case _: Exception => Escalate
-    }
-
   protected val log = LoggerFactory.getLogger(getClass)
   protected val nextHop = getNextHop(context)
 
