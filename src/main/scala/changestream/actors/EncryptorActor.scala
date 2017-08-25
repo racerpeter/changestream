@@ -46,13 +46,8 @@ class EncryptorActor (
       sender() ! result
 
     case Ciphertext(message) =>
-      try {
-        val result = decryptFields(message)
-        sender() ! result
-      }
-      catch {
-        case e:Exception => sender() ! akka.actor.Status.Failure(e)
-      }
+      val result = decryptFields(message)
+      sender() ! result
   }
 
   private def encryptFields(message: JsObject, jsonPath: String = ""): JsObject = {
