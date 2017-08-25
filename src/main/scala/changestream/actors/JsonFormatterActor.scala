@@ -130,7 +130,11 @@ class JsonFormatterActor (
           ask(encryptorActor, encryptRequest).map {
             case v: JsValue =>
               message.copy(formattedMessage = Some(v.prettyPrint))
-          } pipeTo nextHop
+          } pipeTo nextHop onFailure {
+            case e: Exception =>
+              log.error(s"Failed to encrypt JSON event: ${e.getMessage}")
+              throw e
+          }
         }
         else {
           log.debug(s"Sending JSON event to the ${nextHop.path.name} actor")
