@@ -41,6 +41,24 @@ class JsonFormatterActorSpec extends Base with Config {
     case _ => Map[String, JsValue]()
   }
 
+  def expectJsonStringFrom(
+                      mutation: MutationWithInfo,
+                      eventCount: Int = 0,
+                      actor: ActorRef = formatterActor
+                    ): Seq[String] = {
+    actor ! mutation
+
+    val messages = probe.receiveN(eventCount, 5000 milliseconds)
+    messages.map({
+      case MutationWithInfo(m, tx, col, Some(message: String)) =>
+        m should be(mutation.mutation)
+        tx should be(mutation.transaction)
+        col should be(mutation.columns)
+
+        message
+    })
+  }
+
   def expectJsonFrom(
                       mutation: MutationWithInfo,
                       eventCount: Int = 0,
@@ -378,6 +396,36 @@ class JsonFormatterActorSpec extends Base with Config {
       val json = expectJsonFrom(validMutation, 1, actorNoData).head
       json shouldNot contain key "row_data"
       json shouldNot contain key "old_row_data"
+    }
+  }
+
+  "When JsonFormatterActor receives a message with pretty-print enabled" should {
+    "pretty print" in {
+      val configNoData = ConfigFactory
+        .parseString("changestream.pretty-print = true")
+        .withFallback(testConfig)
+        .getConfig("changestream")
+      val actorNoData = TestActorRef(Props(classOf[JsonFormatterActor], maker, configNoData))
+
+      val (validMutation, _, _) = Fixtures.mutationWithInfo("update")
+      val jsonString = expectJsonStringFrom(validMutation, 1, actorNoData).head
+
+      jsonString should include ("\n")
+    }
+  }
+
+  "When JsonFormatterActor receives a message with pretty-print disabled" should {
+    "compact print" in {
+      val configNoData = ConfigFactory
+        .parseString("changestream.pretty-print = false")
+        .withFallback(testConfig)
+        .getConfig("changestream")
+      val actorNoData = TestActorRef(Props(classOf[JsonFormatterActor], maker, configNoData))
+
+      val (validMutation, _, _) = Fixtures.mutationWithInfo("update")
+      val jsonString = expectJsonStringFrom(validMutation, 1, actorNoData).head
+
+      jsonString shouldNot include ("\n")
     }
   }
 

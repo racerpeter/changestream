@@ -96,6 +96,7 @@ class JsonFormatterActor (
   protected val log = LoggerFactory.getLogger(getClass)
 
   protected val includeData = config.getBoolean("include-data")
+  protected val prettyPrint = config.getBoolean("pretty-print")
   protected val encryptData = if(!includeData) false else config.getBoolean("encryptor.enabled")
 
   protected lazy val encryptorActor = context.actorOf(Props(new EncryptorActor(config.getConfig("encryptor"))), name = "encryptorActor")
@@ -129,7 +130,7 @@ class JsonFormatterActor (
           val encryptRequest = Plaintext(json)
           ask(encryptorActor, encryptRequest).map {
             case v: JsValue =>
-              message.copy(formattedMessage = Some(v.prettyPrint))
+              message.copy(formattedMessage = Some(getJsonString(v)))
           } pipeTo nextHop onFailure {
             case e: Exception =>
               log.error(s"Failed to encrypt JSON event: ${e.getMessage}")
@@ -138,10 +139,15 @@ class JsonFormatterActor (
         }
         else {
           log.debug(s"Sending JSON event to the ${nextHop.path.name} actor")
-          nextHop ! message.copy(formattedMessage = Some(json.prettyPrint))
+          nextHop ! message.copy(formattedMessage = Some(getJsonString(json)))
         }
       })
     }
+  }
+
+  protected def getJsonString(v: JsValue) = prettyPrint match {
+    case true => v.prettyPrint
+    case false => v.compactPrint
   }
 
   protected def getRowData(message: MutationWithInfo) = {
