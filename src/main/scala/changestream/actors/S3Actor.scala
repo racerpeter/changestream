@@ -56,7 +56,7 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
   }
 
   protected def getMessageBatch: String = {
-    val messages = "[" + messageBuffer.reduceLeft(_ + ",\n" + _) + "]"
+    val messages = messageBuffer.reduceLeft(_ + "\n" + _)
     messageBuffer.clear()
 
     messages
