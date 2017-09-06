@@ -1,5 +1,14 @@
 # Changestream Changelog
 
+## 0.2.3 (2017-09-06)
+
+- Optionally read the `changesteam.include-data` setting from the `INCLUDE_DATA` environment variable.
+- Added optional pretty printing of JSON via the `changestream.pretty-print` setting (overridden optionally by the `PRETTY_PRINT` env).
+- S3 Emitter will now separate changes with a newline character rather than [...,...] for compatibility with JsonSerDe
+- Introduced a custom actor supervisor strategy to provide better error handling
+- General improvements to error handling
+
+
 ## 0.2.2 (2017-08-24)
 
 - Use `StdoutActor` as the default emitter actor, making it easier to get started and test changestream.
