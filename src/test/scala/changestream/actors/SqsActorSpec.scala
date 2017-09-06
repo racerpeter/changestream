@@ -53,12 +53,4 @@ class SqsActorSpec extends Emitter with Config {
       result2.status.asInstanceOf[BatchResult].queued should have length 1
     }
   }
-
-  "When SqsActor receives an invalid message" should {
-    "Return a failure message, and throw an exception" in {
-      actorRef ! INVALID_MESSAGE
-
-      expectMsgType[akka.actor.Status.Failure](1000 milliseconds)
-    }
-  }
 }

@@ -33,12 +33,4 @@ class SnsActorSpec extends Emitter with Config {
       result.status shouldBe a[String]
     }
   }
-
-  "When SnsActor receives an invalid message" should {
-    "Return a failure message, and throw an exception" in {
-      actorRef ! INVALID_MESSAGE
-
-      expectMsgType[akka.actor.Status.Failure](1000 milliseconds)
-    }
-  }
 }

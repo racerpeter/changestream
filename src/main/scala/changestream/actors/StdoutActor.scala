@@ -9,7 +9,5 @@ class StdoutActor(config: Config = ConfigFactory.load().getConfig("changestream"
     case MutationWithInfo(mutation, _, _, Some(message: String)) =>
       println(message)
       sender() ! akka.actor.Status.Success(message)
-    case _ =>
-      sender() ! akka.actor.Status.Failure(new Exception("Received invalid message"))
   }
 }

@@ -1,12 +1,9 @@
 package changestream.actors
 
-import akka.actor.SupervisorStrategy.Escalate
-
-import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Failure, Success}
-import akka.actor.{Actor, OneForOneStrategy}
-import changestream.events.{ColumnsInfo, MutationEvent, MutationWithInfo}
+import akka.actor.Actor
+import changestream.events.{MutationEvent, MutationWithInfo}
 import com.amazonaws.services.sns.AmazonSNSAsyncClient
 import com.amazonaws.services.sns.model.CreateTopicResult
 import com.github.dwhjames.awswrap.sns.AmazonSNSScalaClient
@@ -14,7 +11,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Future
 
 object SnsActor {
   def getTopic(mutation: MutationEvent, topic: String, topicHasVariable: Boolean = true): String = {
@@ -28,11 +25,6 @@ object SnsActor {
 }
 
 class SnsActor(config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
-  override val supervisorStrategy =
-    OneForOneStrategy(loggingEnabled = true) {
-      case _: Exception => Escalate
-    }
-
   protected val log = LoggerFactory.getLogger(getClass)
   protected implicit val ec = context.dispatcher
 
@@ -53,31 +45,21 @@ class SnsActor(config: Config = ConfigFactory.load().getConfig("changestream")) 
   def receive = {
     case MutationWithInfo(mutation, _, _, Some(message: String)) =>
       log.debug(s"Received message: ${message}")
-      send(mutation, message)
-    case _ =>
-      log.error(s"Received invalid message.")
-      sender() ! akka.actor.Status.Failure(new Exception("Received invalid message"))
-  }
 
-  protected def getTopic(mutation: MutationEvent): String = {
-    SnsActor.getTopic(mutation, snsTopic, snsTopicHasVariable)
-  }
+      val origSender = sender()
+      val topic = SnsActor.getTopic(mutation, snsTopic, snsTopicHasVariable)
+      val topicArn = topicArns.getOrElse(topic, client.createTopic(topic))
+      topicArns.update(topic, topicArn)
 
-  protected def send(mutation: MutationEvent, message: String) = {
-    val origSender = sender()
-    val topic = getTopic(mutation)
-    val topicArn = topicArns.getOrElse(topic, client.createTopic(topic))
-    topicArns.update(topic, topicArn)
+      val request = topicArn.flatMap(topic => client.publish(topic.getTopicArn, message))
 
-    val request = topicArn.flatMap(topic => client.publish(topic.getTopicArn, message))
-
-    request onComplete {
-      case Success(result) =>
-        log.debug(s"Successfully published message to ${snsTopic} (messageId ${result.getMessageId})")
-        origSender ! akka.actor.Status.Success(result.getMessageId)
-      case Failure(exception) =>
-        log.error(s"Failed to publish to topic ${snsTopic}.", exception)
-        origSender ! akka.actor.Status.Failure(exception)
-    }
+      request onComplete {
+        case Success(result) =>
+          log.debug(s"Successfully published message to ${topic} (messageId ${result.getMessageId})")
+          origSender ! akka.actor.Status.Success(result.getMessageId)
+        case Failure(exception) =>
+          log.error(s"Failed to publish to topic ${topic}: ${exception.getMessage}")
+          throw exception
+      }
   }
 }

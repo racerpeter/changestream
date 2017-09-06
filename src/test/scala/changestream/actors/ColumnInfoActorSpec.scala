@@ -12,7 +12,6 @@ import com.typesafe.config.ConfigFactory
 class ColumnInfoActorSpec extends Database {
   val probe = TestProbe()
   val maker = (_: ActorRefFactory) => probe.ref
-  val columnInfoActor = TestActorRef(Props(classOf[ColumnInfoActor], maker, config))
 
   val probeNoPreload = TestProbe()
   val makerNoPreload = (_: ActorRefFactory) => probeNoPreload.ref
@@ -29,11 +28,13 @@ class ColumnInfoActorSpec extends Database {
 
   "When there is a valid connection" should {
     "No mutation event for an invalid database or table" in {
+      val columnInfoActor = TestActorRef(Props(classOf[ColumnInfoActor], maker, config))
       columnInfoActor ! fakeMutationWithNoInfo
       probe.expectNoMsg(connectionTimeout milliseconds)
     }
 
     "Reply with correct column info for a valid table with preload" in {
+      val columnInfoActor = TestActorRef(Props(classOf[ColumnInfoActor], maker, config))
       columnInfoActor ! mutationWithNoInfo
       probe.expectMsg(
         connectionTimeout milliseconds,
@@ -50,6 +51,7 @@ class ColumnInfoActorSpec extends Database {
     }
 
     "Reply with correct column info when a column is added, changed or dropped" in {
+      val columnInfoActor = TestActorRef(Props(classOf[ColumnInfoActor], maker, config))
       var alterSql = "alter table changestream_test.users add column email varchar(128)"
       queryAndWait(alterSql)
 
@@ -111,6 +113,7 @@ class ColumnInfoActorSpec extends Database {
     }
 
     "Returns the columns in ordinal_position (binlog) order" in {
+      val columnInfoActor = TestActorRef(Props(classOf[ColumnInfoActor], maker, config))
       var alterSql = "alter table changestream_test.users add column email varchar(128) unique"
       queryAndWait(alterSql)
 

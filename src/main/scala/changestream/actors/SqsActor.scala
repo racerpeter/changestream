@@ -1,12 +1,10 @@
 package changestream.actors
 
-import akka.actor.SupervisorStrategy.Escalate
-
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Failure, Success}
-import akka.actor.{Actor, ActorRef, Cancellable, OneForOneStrategy}
+import akka.actor.{Actor, ActorRef, Cancellable}
 import changestream.events.MutationWithInfo
 import com.amazonaws.services.sqs.AmazonSQSAsyncClient
 import com.amazonaws.services.sqs.model.SendMessageBatchResult
@@ -24,11 +22,6 @@ object SqsActor {
 
 class SqsActor(config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
   import SqsActor._
-
-  override val supervisorStrategy =
-    OneForOneStrategy(loggingEnabled = true) {
-      case _: Exception => Escalate
-    }
 
   protected val log = LoggerFactory.getLogger(getClass)
   protected implicit val ec = context.dispatcher
@@ -68,7 +61,7 @@ class SqsActor(config: Config = ConfigFactory.load().getConfig("changestream")) 
   protected val queueUrl = client.createQueue(sqsQueue)
   queueUrl.failed.map {
     case exception:Throwable =>
-      log.error(s"Failed to get or create SQS queue ${sqsQueue}.", exception)
+      log.error(s"Failed to get or create SQS queue ${sqsQueue}: ${exception.getMessage}")
       throw exception
   }
 
@@ -92,10 +85,6 @@ class SqsActor(config: Config = ConfigFactory.load().getConfig("changestream")) 
 
     case FlushRequest(origSender) =>
       flush(origSender)
-
-    case _ =>
-      log.error("Received invalid message")
-      sender() ! akka.actor.Status.Failure(new Exception("Received invalid message"))
   }
 
   protected def flush(origSender: ActorRef) = {
@@ -115,8 +104,8 @@ class SqsActor(config: Config = ConfigFactory.load().getConfig("changestream")) 
           s"(sent: ${result.getSuccessful.size()}, failed: ${result.getFailed.size()})")
         origSender ! akka.actor.Status.Success(getBatchResult(result))
       case Failure(exception) =>
-        log.error(s"Failed to send message batch to ${sqsQueue}", exception)
-        origSender ! akka.actor.Status.Failure(exception)
+        log.error(s"Failed to send message batch to ${sqsQueue}: ${exception.getMessage}")
+        throw exception
     }
   }
 

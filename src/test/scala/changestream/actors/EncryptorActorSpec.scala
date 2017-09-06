@@ -1,6 +1,7 @@
 package changestream.actors
 
 import akka.actor.Props
+import akka.testkit.EventFilter
 import akka.testkit.TestActorRef
 import changestream.actors.EncryptorActor._
 import changestream.helpers.{Base, Config}
@@ -63,9 +64,10 @@ class EncryptorActorSpec extends Base with Config {
       decryptResponse.fields("parent").asJsObject.fields("no_encrypt_hash") should be(JsObject("cc" -> JsNumber(3), "dd" -> JsNumber(4)))
     }
 
-    "expect decrypt of invalid ciphertext to result in failure message" in {
-      encryptorActor ! Ciphertext(sourceObject)
-      expectMsgType[akka.actor.Status.Failure]
+    "expect decrypt of invalid ciphertext to result in an exception" in {
+      EventFilter[IllegalArgumentException](occurrences = 1) intercept {
+        encryptorActor ! Ciphertext(sourceObject)
+      }
     }
   }
 }

@@ -1,7 +1,6 @@
 package changestream.actors
 
-import akka.actor.SupervisorStrategy.{Escalate, Restart}
-import akka.actor.{Actor, ActorRef, ActorRefFactory, OneForOneStrategy}
+import akka.actor.{Actor, ActorRef, ActorRefFactory}
 import akka.pattern.pipe
 import com.github.mauricio.async.db.{Configuration, RowData}
 import com.typesafe.config.{Config, ConfigFactory}
@@ -12,7 +11,6 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.concurrent.{Await, Future}
 import changestream.events.{MutationWithInfo, _}
-import com.github.mauricio.async.db.mysql.exceptions.MySQLException
 import com.github.mauricio.async.db.mysql.pool.MySQLConnectionFactory
 import com.github.mauricio.async.db.pool.{ConnectionPool, PoolConfiguration}
 
@@ -35,12 +33,6 @@ class ColumnInfoActor (
 ) extends Actor {
   import ColumnInfoActor._
   import context.dispatcher
-
-  override val supervisorStrategy =
-    OneForOneStrategy(loggingEnabled = true) {
-      case _: MySQLException => Restart
-      case _: Exception => Escalate
-    }
 
   protected val log = LoggerFactory.getLogger(getClass)
   protected val nextHop = getNextHop(context)
@@ -71,10 +63,10 @@ class ColumnInfoActor (
 
     connectRequest onComplete {
       case Success(result) =>
-        log.info("Connected to MySQL server for Metadata!!")
+        log.info("Connected to MySQL server for Metadata!")
 
       case Failure(exception) =>
-        log.error("Could not connect to MySQL server for Metadata", exception)
+        log.error(s"Could not connect to MySQL server for Metadata: ${exception.getMessage}")
         throw exception
     }
 
@@ -128,10 +120,6 @@ class ColumnInfoActor (
 
       columnsInfoCache.remove(alter.cacheKey)
       requestColumnInfo(getNextSchemaSequence, alter.database, alter.tableName)
-
-    case _ =>
-      log.error("Invalid message received by ColumnInfoActor")
-      throw new Exception("Invalid message received by ColumnInfoActor")
   }
 
   protected def requestColumnInfo(schemaSequence: Long, database: String, tableName: String) = {
@@ -140,9 +128,9 @@ class ColumnInfoActor (
         log.error(s"Couldn't fetch column info for ${database}.${tableName}", exception)
         throw exception
     } map {
-      case Some(result) => result
+      case Some(result) => self ! result
       case None => log.warn(s"No column metadata found for table ${database}.${tableName}")
-    } pipeTo self
+    }
   }
 
   protected def getColumnsInfo(schemaSequence: Long, database: String, tableName: String): Future[Option[ColumnsInfo]] = {
@@ -177,7 +165,7 @@ class ColumnInfoActor (
       val request = for {
         columnsInfo <- getAllColumnsInfo recover {
           case exception =>
-            log.error(s"Couldn't fetch metadata for databases: ${preloadDatabases}", exception)
+            log.error(s"Couldn't fetch metadata for databases: ${preloadDatabases}")
             throw exception
         }
       } yield columnsInfo.foreach {

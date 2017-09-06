@@ -71,12 +71,4 @@ class S3ActorSpec extends Emitter with Config {
       result2.status.toString should endWith ("-1.json")
     }
   }
-
-  "When S3Actor receives an invalid message" should {
-    "Return a failure message, and throw an exception" in {
-      actorRef ! INVALID_MESSAGE
-
-      expectMsgType[akka.actor.Status.Failure](1000 milliseconds)
-    }
-  }
 }
