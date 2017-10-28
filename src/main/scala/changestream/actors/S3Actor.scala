@@ -101,17 +101,15 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
   }
 
   override def preStart() = {
-    val testPutFuture = {
-      val file = new File(s"${BUFFER_TEMP_DIR}test.txt")
-      val bw = new BufferedWriter(new FileWriter(file))
-      bw.write("test")
-      bw.close()
+    val file = new File(s"${BUFFER_TEMP_DIR}test.txt")
+    val bw = new BufferedWriter(new FileWriter(file))
+    bw.write("test")
+    bw.close()
 
-      putFile(file).failed.map {
-        case exception:Throwable =>
-          log.error(s"Failed to create test object in S3 bucket ${BUCKET} at key ${KEY_PREFIX}test.txt: ${exception.getMessage}")
-          throw exception
-      }
+    val testPutFuture = putFile(file).failed.map {
+      case exception:Throwable =>
+        log.error(s"Failed to create test object in S3 bucket ${BUCKET} at key ${KEY_PREFIX}test.txt: ${exception.getMessage}")
+        throw exception
     }
 
     Await.result(testPutFuture, TIMEOUT milliseconds)
