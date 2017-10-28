@@ -47,6 +47,13 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
   }
   protected def cancelDelayedFlush = cancellableSchedule.foreach(_.cancel())
 
+  protected lazy val client = new AmazonS3ScalaClient(
+    new DefaultAWSCredentialsProviderChain(),
+    new ClientConfiguration().
+      withConnectionTimeout(TIMEOUT),
+    Regions.fromName(config.getString("aws.region"))
+  )
+
   // Mutable State!!
   protected var currentBatchSize = 0
   protected var bufferFile: File = getNextFile
@@ -66,7 +73,7 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
     currentBatchSize += 1
   }
 
-  protected def getMetadata(length: Int, sseAlgorithm: String = "AES256") = {
+  protected def getMetadata(length: Long, sseAlgorithm: String = "AES256") = {
     val metadata = new ObjectMetadata()
     metadata.setSSEAlgorithm(sseAlgorithm)
     metadata.setContentLength(length)
@@ -89,29 +96,24 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
       case "" => file.getName
       case _ => key
     }
-    client.putObject(new PutObjectRequest(BUCKET, s"${KEY_PREFIX}${objectKey}", file))
-  }
-
-  protected val client = new AmazonS3ScalaClient(
-    new DefaultAWSCredentialsProviderChain(),
-    new ClientConfiguration().
-      withConnectionTimeout(TIMEOUT),
-    Regions.fromName(config.getString("aws.region"))
-  )
-  protected val testPutFuture = {
-    val file = new File(s"${BUFFER_TEMP_DIR}test.txt")
-    val bw = new BufferedWriter(new FileWriter(file))
-    bw.write("test")
-    bw.close()
-
-    putFile(file).failed.map {
-      case exception:Throwable =>
-        log.error(s"Failed to create test object in S3 bucket ${BUCKET} at key ${KEY_PREFIX}test.txt: ${exception.getMessage}")
-        throw exception
-    }
+    val metadata = getMetadata(file.length)
+    client.putObject(new PutObjectRequest(BUCKET, s"${KEY_PREFIX}${objectKey}", file).withMetadata(metadata))
   }
 
   override def preStart() = {
+    val testPutFuture = {
+      val file = new File(s"${BUFFER_TEMP_DIR}test.txt")
+      val bw = new BufferedWriter(new FileWriter(file))
+      bw.write("test")
+      bw.close()
+
+      putFile(file).failed.map {
+        case exception:Throwable =>
+          log.error(s"Failed to create test object in S3 bucket ${BUCKET} at key ${KEY_PREFIX}test.txt: ${exception.getMessage}")
+          throw exception
+      }
+    }
+
     Await.result(testPutFuture, TIMEOUT milliseconds)
     log.info(s"Ready to push messages to bucket ${BUCKET} with key prefix ${KEY_PREFIX}")
   }
