@@ -61,7 +61,7 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
   // End Mutable State!!
 
   // Wrap the Java IO
-  protected def getNextFile = File.createTempFile("buffer", ".json", bufferDirectory)
+  protected def getNextFile = File.createTempFile("-buffer", ".json", bufferDirectory)
   protected def getWriterForFile = {
     val streamWriter = new OutputStreamWriter(new FileOutputStream(bufferFile), StandardCharsets.UTF_8)
     new BufferedWriter(streamWriter)
@@ -107,8 +107,10 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
     bw.close()
 
     val testPutFuture = putFile(file)
-    testPutFuture.failed.map {
-      case exception:Throwable =>
+    testPutFuture onComplete {
+      case Success(_: PutObjectResult) =>
+        file.delete()
+      case Failure(exception) =>
         log.error(s"Failed to create test object in S3 bucket ${BUCKET} at key ${KEY_PREFIX}test.txt: ${exception.getMessage}")
         throw exception
     }
@@ -118,6 +120,11 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
   }
   override def postStop() = {
     cancelDelayedFlush
+
+    // TODO: this does mean that any in-flight messages would be buffered
+    bufferWriter.close()
+    bufferFile.delete()
+
     client.shutdown()
   }
 
@@ -140,9 +147,10 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
   protected def flush(origSender: ActorRef) = {
     log.debug(s"Flushing ${currentBatchSize} messages to S3.")
 
+    val batchSize = currentBatchSize
     val now = DateTime.now
     val datePrefix = f"${now.getYear}/${now.getMonthOfYear}%02d/${now.getDayOfMonth}%02d"
-    val key = s"${datePrefix}/${System.nanoTime}-${currentBatchSize}.json"
+    val key = s"${datePrefix}/${System.nanoTime}-${batchSize}.json"
     val file = getMessageBatch
     val request = putFile(file, key)
 
@@ -150,11 +158,11 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
 
     request onComplete {
       case Success(result: PutObjectResult) =>
+        log.info(s"Successfully saved ${batchSize} messages (${file.length} bytes) to ${s3Url}.")
         file.delete()
-        log.info(s"Successfully saved ${currentBatchSize} messages (${file.length} bytes) to ${s3Url}.")
         origSender ! akka.actor.Status.Success(s3Url)
       case Failure(exception) =>
-        log.error(s"Failed to save ${currentBatchSize} messages from ${file.getName} (${file.length} bytes) to ${s3Url}: ${exception.getMessage}")
+        log.error(s"Failed to save ${batchSize} messages from ${file.getName} (${file.length} bytes) to ${s3Url}: ${exception.getMessage}")
         throw exception
     }
   }
