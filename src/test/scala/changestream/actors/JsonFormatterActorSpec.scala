@@ -325,6 +325,15 @@ class JsonFormatterActorSpec extends Base with Config {
     }
   }
 
+  "The Json string, if it contains a newline character" should {
+    "have escaped newlines" in {
+      val obj = JsObject(ListMap("testMultiLine" -> JsString("""the value
+is multiline""")))
+
+      obj.compactPrint.shouldEqual("{\"testMultiLine\":\"the value\\nis multiline\"}")
+    }
+  }
+
   "When JsonFormatterActor receives many messages" should {
     "query row_count stats should be correct" in {
       val (mutation, rowData, oldRowData) = Fixtures.mutationWithInfo("update", 100, 100, true)
