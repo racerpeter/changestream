@@ -30,7 +30,7 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
   protected implicit val ec = context.dispatcher
 
   protected val BUFFER_TEMP_DIR = config.getString("aws.s3.buffer-temp-dir")
-  protected val bufferDirectory = new File(BUFFER_TEMP_DIR)
+  protected lazy val bufferDirectory = new File(BUFFER_TEMP_DIR)
   protected val BUCKET = config.getString("aws.s3.bucket")
   protected val KEY_PREFIX = config.getString("aws.s3.key-prefix") match {
     case s if s.endsWith("/") => s
@@ -61,7 +61,10 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
   // End Mutable State!!
 
   // Wrap the Java IO
-  protected def getNextFile = File.createTempFile("-buffer", ".json", bufferDirectory)
+  protected def getNextFile = BUFFER_TEMP_DIR match {
+    case "" => File.createTempFile("-buffer", ".json")
+    case _ => File.createTempFile("-buffer", ".json", bufferDirectory)
+  }
   protected def getWriterForFile = {
     val streamWriter = new OutputStreamWriter(new FileOutputStream(bufferFile), StandardCharsets.UTF_8)
     new BufferedWriter(streamWriter)
