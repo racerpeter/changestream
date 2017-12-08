@@ -62,8 +62,13 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
 
   // Wrap the Java IO
   protected def getNextFile = BUFFER_TEMP_DIR match {
-    case "" => File.createTempFile("-buffer", ".json")
-    case _ => File.createTempFile("-buffer", ".json", bufferDirectory)
+    case "" =>
+      File.createTempFile("-buffer", ".json")
+    case _ if bufferDirectory.exists && bufferDirectory.canWrite =>
+      File.createTempFile("-buffer", ".json", bufferDirectory)
+    case _ =>
+      log.error(s"Failed to write to buffer directory ${bufferDirectory}, make sure it exists and is writeable. Using the system default temp dir instead.")
+      File.createTempFile("-buffer", ".json")
   }
   protected def getWriterForFile = {
     val streamWriter = new OutputStreamWriter(new FileOutputStream(bufferFile), StandardCharsets.UTF_8)
