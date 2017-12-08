@@ -106,7 +106,8 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
     bw.write("test")
     bw.close()
 
-    val testPutFuture = putFile(file).failed.map {
+    val testPutFuture = putFile(file)
+    testPutFuture.failed.map {
       case exception:Throwable =>
         log.error(s"Failed to create test object in S3 bucket ${BUCKET} at key ${KEY_PREFIX}test.txt: ${exception.getMessage}")
         throw exception
