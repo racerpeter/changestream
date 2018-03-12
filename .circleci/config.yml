@@ -56,6 +56,16 @@ jobs:
             - ".ivy2"
             - ".sbt"
 
+  coverage:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: /root
+      - run:
+          name: Code Coverage
+          command: |
+            sbt clean coverage coverageReport
+
   unit-tests:
     <<: *defaults
     steps:
@@ -134,6 +144,9 @@ workflows:
   build_test_deploy:
     jobs:
       - build
+      - coverage:
+          requires:
+            - build
       - unit-tests:
           requires:
             - build
