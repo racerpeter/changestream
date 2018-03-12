@@ -62,9 +62,10 @@ jobs:
       - attach_workspace:
           at: /root
       - run:
-          name: Unit Tests
+          name: Unit Tests (w/ Code Coverage)
           command: |
-            sbt test
+            sbt clean coverage test coverageReport && \
+            bash <(curl -s https://codecov.io/bash)
       - store_test_results:
           path: /root/current/target/test-reports
 
