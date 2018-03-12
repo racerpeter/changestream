@@ -56,26 +56,16 @@ jobs:
             - ".ivy2"
             - ".sbt"
 
-  coverage:
-    <<: *defaults
-    steps:
-      - attach_workspace:
-          at: /root
-      - run:
-          name: Code Coverage
-          command: |
-            sbt clean coverage coverageReport && \
-            bash <(curl -s https://codecov.io/bash)
-
   unit-tests:
     <<: *defaults
     steps:
       - attach_workspace:
           at: /root
       - run:
-          name: Unit Tests
+          name: Unit Tests (w/ Code Coverage)
           command: |
-            sbt test
+            sbt clean coverage test coverageReport && \
+            bash <(curl -s https://codecov.io/bash)
       - store_test_results:
           path: /root/current/target/test-reports
 
@@ -145,9 +135,6 @@ workflows:
   build_test_deploy:
     jobs:
       - build
-      - coverage:
-          requires:
-            - build
       - unit-tests:
           requires:
             - build
