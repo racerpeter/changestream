@@ -64,7 +64,8 @@ jobs:
       - run:
           name: Code Coverage
           command: |
-            sbt clean coverage coverageReport
+            sbt clean coverage coverageReport && \
+            bash <(curl -s https://codecov.io/bash)
 
   unit-tests:
     <<: *defaults
