@@ -64,7 +64,7 @@ jobs:
       - run:
           name: Unit Tests (w/ Code Coverage)
           command: |
-            sbt clean coverage test coverageReport && \
+            sbt clean coverage test it:test coverageReport && \
             bash <(curl -s https://codecov.io/bash)
       - store_test_results:
           path: /root/current/target/test-reports
