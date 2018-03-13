@@ -1,6 +1,4 @@
-[![CircleCI](https://circleci.com/gh/mavenlink/changestream.svg?style=svg)](https://circleci.com/gh/mavenlink/changestream)
-
-<img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRTURAvcnXp2Fj7Kx83GStK-PbSfOw1rFfxtygMsayJ2I9FUYR-Pg" align="right" />
+[![CircleCI](https://circleci.com/gh/mavenlink/changestream.svg?style=svg)](https://circleci.com/gh/mavenlink/changestream) [![codecov](https://codecov.io/gh/mavenlink/changestream/branch/master/graph/badge.svg)](https://codecov.io/gh/mavenlink/changestream)
 
 # Changestream
 Changestream sources object-level change events from a [MySQL Replication Master](http://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html) (configured for [row-based replication](http://dev.mysql.com/doc/refman/5.7/en/replication-rbr-usage.html)) by streaming the [MySQL binlog](https://dev.mysql.com/doc/internals/en/binary-log.html) and transforming change events into JSON strings that can be published anywhere.
