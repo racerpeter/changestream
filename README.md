@@ -14,6 +14,15 @@ Currently, [Amazon Simple Queuing Service (SQS)](https://aws.amazon.com/sqs/), [
 - [Architecture](docs/architecture.md)
 - [Binlog Event Routing](docs/binlog-event-routing.md)
 
+## Developing
+
+### Requirements
+
+- [Scala 2.11](https://www.scala-lang.org/)
+- [Akka 2.5](https://akka.io/)
+- [SBT 0.13](https://www.scala-sbt.org/)
+- [MySQL 5.7](https://www.mysql.com/) (5.5+ supported)
+
 ## Getting Started
 ### The Easy Way with Docker
 The easiest way to get started with Changestream is to simply run:
@@ -87,14 +96,6 @@ $ sbt package
 
 #### IntelliJ
 If you are planning to do development on Changestream, you can open the project using [IntelliJ](https://www.jetbrains.com/idea/). Changestream provides valid build, test and run (with debug!) configurations via the `.idea` folder.
-
-## Requirements
-Changestream is built against
-
-- Scala 2.11
-- Akka 2.5
-- SBT 0.13
-- MySQL 5.7 (5.5+ supported)
 
 ## Contributing
 
