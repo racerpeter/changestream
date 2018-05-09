@@ -1,6 +1,7 @@
+# Changestream
+
 [![CircleCI](https://circleci.com/gh/mavenlink/changestream.svg?style=svg)](https://circleci.com/gh/mavenlink/changestream) [![codecov](https://codecov.io/gh/mavenlink/changestream/branch/master/graph/badge.svg)](https://codecov.io/gh/mavenlink/changestream)
 
-# Changestream
 Changestream sources object-level change events from a [MySQL Replication Master](http://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html) (configured for [row-based replication](http://dev.mysql.com/doc/refman/5.7/en/replication-rbr-usage.html)) by streaming the [MySQL binlog](https://dev.mysql.com/doc/internals/en/binary-log.html) and transforming change events into JSON strings that can be published anywhere.
 
 Currently, [Amazon Simple Queuing Service (SQS)](https://aws.amazon.com/sqs/), [Amazon Simple Notification Service](https://aws.amazon.com/sns/) and [Amazon S3](https://aws.amazon.com/s3/) are supported with optional client-side message encryption via AES.
@@ -169,13 +170,13 @@ The `ChangeStreamEventListener` and `ChangeStreamEventDeserializer` handles the 
 
 ### The Actor System
 #### TransactionActor
-The `TransactionActor` is responsible for maintaining state about 
-[MySQL Transactions](http://dev.mysql.com/doc/refman/5.7/en/sql-syntax-transactions.html) that may be in progress, and 
+The `TransactionActor` is responsible for maintaining state about
+[MySQL Transactions](http://dev.mysql.com/doc/refman/5.7/en/sql-syntax-transactions.html) that may be in progress, and
 provides the `JsonFormatterActor` with transaction metadata that can be appended to the JSON payload.
 
 #### ColumnInfoActor
-Arguably the most complicated actor in the system, it is responsible for fetching primary key information, column names, 
-and data types from MySQL via a sidechannel (standard MySQL client connection). This information is used by the 
+Arguably the most complicated actor in the system, it is responsible for fetching primary key information, column names,
+and data types from MySQL via a sidechannel (standard MySQL client connection). This information is used by the
 `JsonFormatterActor` to provide the changed data in a nice human-readable format.
 
 #### JsonFormatterActor
@@ -204,11 +205,11 @@ The `S3Actor` buffers formatted change events, and emits them in batches to S3 o
 size. This publisher can be used with Amazon Athena to easily access and query an audit log of database changes.
 
 #### StdoutActor
-The `StdoutActor` is primarily included for debugging and example purposes, and simply prints the stringified mutation 
+The `StdoutActor` is primarily included for debugging and example purposes, and simply prints the stringified mutation
 to `STDOUT`. If you intend to create a custom emitter, this could be a good place to start.
 
 #### MyNewProducerActor
-You probably see where this is going. More producer actors are welcome! They couldn't be easier to write, since all the 
+You probably see where this is going. More producer actors are welcome! They couldn't be easier to write, since all the
 heavy lifting of creating a JSON string is already done!
 
 ```
