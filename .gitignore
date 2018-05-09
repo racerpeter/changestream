@@ -50,3 +50,4 @@ project/plugins/project/
 *.overrides.conf
 
 .DS_Store
+test.txt
