@@ -39,37 +39,6 @@ After running `docker-compose up`, you will have access to a mysql instance on l
 
 [The bespoke setup](docs/the-bespoke-setup.md)
 
-### Configuration (application.conf/ENV)
-
-#### MySQL Configuration
-Ensure that the MySQL authentication info in application.conf is correct. You can ovveride the defaults during development by creating a `src/main/scala/resources/application.overrides.conf` file, which is git ignored:
-
-```
-changestream {
-		mysql {
-    	host = "localhost"
-	    port = 3306
-    	user = "changestream"
-	    password = "changestreampass"
-	}
-}
-```
-
-You can also configure most settings using environment variables. For example, you could put the following in a Changestream init script:
-
-```
-export MYSQL_HOST=localhost
-export MYSQL_PORT=3306
-export MYSQL_USER=changestream
-export MYSQL_PASS=changestreampass
-
-```
-
-#### Emitter Configuration
-If you would like to override the default emitter (`StdoutActor`), you can do so by setting `changestream.emitter` or the `EMITTER` environment variable to the fully qualified class name (for example, `changestream.actors.SnsActor`).
-
-To configure the SNS emitter, you must [provide AWS credentials](http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html#config-settings-and-precedence), and configure `changestream.aws.sns.topic`.
-
 ### Building and Running Changestream
 #### SBT
 You can build and run Changestream using the [SBT CLI](http://www.scala-sbt.org/0.13/docs/Command-Line-Reference.html):
