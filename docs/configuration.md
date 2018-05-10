@@ -6,12 +6,12 @@ Ensure that the MySQL authentication info in `src/main/resources/application.con
 
 ```
 changestream {
-		mysql {
-    	host = "localhost"
-	    port = 3306
-    	user = "changestream"
-	    password = "changestreampass"
-	}
+  mysql {
+    host = "localhost"
+    port = 3306
+    user = "changestream"
+    password = "changestreampass"
+  }
 }
 ```
 
@@ -22,7 +22,6 @@ export MYSQL_HOST=localhost
 export MYSQL_PORT=3306
 export MYSQL_USER=changestream
 export MYSQL_PASS=changestreampass
-
 ```
 
 ## Emitter Configuration
