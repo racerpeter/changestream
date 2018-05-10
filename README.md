@@ -13,6 +13,7 @@ Currently, [Amazon Simple Queuing Service (SQS)](https://aws.amazon.com/sqs/), [
 - [The Stack](docs/the-stack.md)
 - [Architecture](docs/architecture.md)
 - [Binlog Event Routing](docs/binlog-event-routing.md)
+- [IntelliJ](docs/intellij.md)
 
 ## Developing
 
@@ -93,9 +94,6 @@ $ sbt debian:packageBin
 ```
 $ sbt package
 ```
-
-#### IntelliJ
-If you are planning to do development on Changestream, you can open the project using [IntelliJ](https://www.jetbrains.com/idea/). Changestream provides valid build, test and run (with debug!) configurations via the `.idea` folder.
 
 ## Contributing
 
