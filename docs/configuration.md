@@ -2,7 +2,7 @@
 
 ## MySQL Configuration
 
-Ensure that the MySQL authentication info in `src/main/resources/application.conf` is correct. You can override the defaults during development by creating a `src/main/scala/resources/application.overrides.conf` file, which is git ignored:
+Ensure that the MySQL authentication info in `src/main/resources/application.conf` is correct. You can override the defaults during development by creating a `src/main/resources/application.overrides.conf` file, which is git ignored:
 
 ```
 changestream {
