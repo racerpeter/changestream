@@ -14,6 +14,7 @@ Currently, [Amazon Simple Queuing Service (SQS)](https://aws.amazon.com/sqs/), [
 - [Architecture](docs/architecture.md)
 - [Binlog Event Routing](docs/binlog-event-routing.md)
 - [IntelliJ](docs/intellij.md)
+- [Configuration](docs/configuration.md)
 
 ## Developing
 
