@@ -93,9 +93,7 @@ Make sure that your test user has permissions to create and drop databases and t
 
 #### AWS Test Config
 
-To run the integration tests, as well as the unit tests on the `SqsActor` and `SnsActor`, you also need to ensure that you have configured your
-AWS tokens to be available from the environment, and that your AWS tokens have access to create and add messages to queues (SQS) and create and
-publish to topics (SNS).
+To run the integration tests, as well as the unit tests on the `SqsActor` and `SnsActor`, you also need to ensure that you have configured your AWS tokens to be available from the environment, and that your AWS tokens have access to create and add messages to queues (SQS) and create and publish to topics (SNS).
 
 ```
 AWS_ACCESS_KEY_ID=<access_key_id>
