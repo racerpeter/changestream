@@ -16,7 +16,7 @@ Currently, [Amazon Simple Queuing Service (SQS)](https://aws.amazon.com/sqs/), [
 - [IntelliJ](docs/intellij.md)
 - [Configuration](docs/configuration.md)
 
-## Developing
+## Getting Started
 
 ### Requirements
 
@@ -25,42 +25,44 @@ Currently, [Amazon Simple Queuing Service (SQS)](https://aws.amazon.com/sqs/), [
 - [SBT 0.13](https://www.scala-sbt.org/)
 - [MySQL 5.7](https://www.mysql.com/) (5.5+ supported)
 
-## Getting Started
-### The Easy Way with Docker
-The easiest way to get started with Changestream is to simply run:
+### Setup
+
+First, start MySQL with
+
 ```
-$ docker-compose up
+docker-compose up
 ```
 
-After running `docker-compose up`, you will have access to a mysql instance on localhost port 3306 with a root password of "password", and changestream configured to listen for events.
+(or, for the hard way without Docker, follow the [bespoke setup instructions](docs/the-bespoke-setup.md)).
+
+You will then have access to a MySQL instance on localhost port 3306 with a root password of "password", and Changestream configured to listen for events.
 
 *Changestream is available on [Docker Hub](https://hub.docker.com/r/mavenlink/changestream/).*
 
-### The Hard Way
-
-[The bespoke setup](docs/the-bespoke-setup.md)
-
-### Building and Running Changestream
-#### SBT
-You can build and run Changestream using the [SBT CLI](http://www.scala-sbt.org/0.13/docs/Command-Line-Reference.html):
+Then build and run Changestream using the [sbt CLI](http://www.scala-sbt.org/0.13/docs/Command-Line-Reference.html):
 
 ```
 $ sbt run
 ```
 
-#### Build Docker Image (requires a docker host to build)
+### Building
+
+#### Docker Image (requires a docker host to build)
+
 Note: The Dockerfile will be written to `target/docker/Dockerfile`, and the docker image will be added to your local docker repo.
 
 ```
 $ sbt docker
 ```
 
-#### Build Debian Package (requires `dpkg-deb`, written to `target/*.deb`)
+#### Debian Package (requires `dpkg-deb`, written to `target/*.deb`)
+
 ```
 $ sbt debian:packageBin
 ```
 
-#### Build Jar Package (written to `target/scala-2.11/*.jar`)
+#### Jar Package (written to `target/scala-2.11/*.jar`)
+
 ```
 $ sbt package
 ```
