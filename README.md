@@ -101,6 +101,8 @@ publish to topics (SNS).
 AWS_ACCESS_KEY_ID=<access_key_id>
 AWS_SECRET_ACCESS_KEY=<secret_access_key>
 AWS_REGION=<your_region>
+AWS_S3_BUCKET=<your_bucket>
+AWS_S3_KEY_PREFIX=<some_key_prefix>
 ```
 
 #### Running Tests
