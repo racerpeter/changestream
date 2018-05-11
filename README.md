@@ -127,4 +127,4 @@ Changestream is available under the [MIT License](https://github.com/mavenlink/c
 
 ## Inspiration
 
-Changestream was inspired in a large part by [mardambey/mypipe](https://github.com/mardambey/mypipe) by [Hisham Mardam-Bey](https://github.com/mardambey). The first proof-of-concept for changestream was a fork of mypipe, thank you Hisham.
+Changestream was inspired in a large part by [mardambey/mypipe](https://github.com/mardambey/mypipe) by [Hisham Mardam-Bey](https://github.com/mardambey). The first proof-of-concept for changestream was a fork of mypipe - thank you Hisham.
