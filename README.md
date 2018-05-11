@@ -70,14 +70,17 @@ $ sbt package
 ## Contributing
 
 ### Testing
-Changestream is 100% unit and integration tested, with end-to-end testing in [CircleCI](https://circleci.com/gh/mavenlink/change-stream) with MySQL and Amazon SNS.
 
-### Mysql Test Config
+Changestream is 100% unit and integration tested, with end-to-end testing on [CircleCI](https://circleci.com/gh/mavenlink/change-stream) with MySQL and Amazon SNS.
+
+#### Mysql Test Config
+
 In order to run tests locally you need to configure `test.conf` with a working MySQL connection configuration.
 
 Make sure that your test user has permissions to create and drop databases and tables. By default, Changestream uses the `changestream_test` table for tests.
 
-### AWS Test Config
+#### AWS Test Config
+
 To run the integration tests, as well as the unit tests on the `SqsActor` and `SnsActor`, you also need to ensure that you have configured your
 AWS tokens to be available from the environment, and that your AWS tokens have access to create and add messages to queues (SQS) and create and
 publish to topics (SNS).
@@ -88,26 +91,28 @@ AWS_SECRET_ACCESS_KEY=<secret_access_key>
 AWS_REGION=<your_region>
 ```
 
-### Running Tests / IDE
+#### Running Tests
 Once that's all set up, you can either run
 
 ```
 $ sbt test
 ```
 
-from the command line, or open Changestream using [IntelliJ](https://www.jetbrains.com/idea/) (with the [Scala](https://plugins.jetbrains.com/plugin/?id=1347) and [SBT](https://plugins.jetbrains.com/plugin/5007) plugins installed).
+from the command line, or run the test command in [IntelliJ](https://www.jetbrains.com/idea/) (with the [Scala](https://plugins.jetbrains.com/plugin/?id=1347) and [SBT](https://plugins.jetbrains.com/plugin/5007) plugins installed).
 
 ### ScalaStyle
+
 Changestream uses ScalaStyle for code linting--it is not automatic. Before submitting a PR, please take a look at the ScalaStyle output at the top of `sbt test` and correct any issues you find.
 
 
 ## License
+
 Changestream is available under the [MIT License](https://github.com/mavenlink/change-stream/blob/master/LICENSE).
 
-
 ## Authors
-[Peter Fry](https://github.com/racerpeter) ([@racerpeter](https://twitter.com/racerpeter)), and the [Mavengineering](http://www.mavengineering.com/archive) team.
 
+[Peter Fry](https://github.com/racerpeter) ([@racerpeter](https://twitter.com/racerpeter)) and the [Mavengineering](http://www.mavengineering.com/archive) team.
 
 ## Inspiration
-Changestream was inspired in a large part by [mardambey/mypipe](https://github.com/mardambey/mypipe) by [Hisham Mardam-Bey](https://github.com/mardambey). My first proof-of-concept for changestream was a fork of mypipe, thank you Hisham.
+
+Changestream was inspired in a large part by [mardambey/mypipe](https://github.com/mardambey/mypipe) by [Hisham Mardam-Bey](https://github.com/mardambey). The first proof-of-concept for changestream was a fork of mypipe, thank you Hisham.
