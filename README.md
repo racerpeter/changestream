@@ -6,6 +6,18 @@ Changestream sources object-level change events from a [MySQL Replication Master
 
 Currently, [Amazon Simple Queuing Service (SQS)](https://aws.amazon.com/sqs/), [Amazon Simple Notification Service](https://aws.amazon.com/sns/) and [Amazon S3](https://aws.amazon.com/s3/) are supported with optional client-side message encryption via AES.
 
+- [Documentation](#documentation)
+- [Getting Started](#getting-started)
+  - [Requirements](#requirements)
+  - [Setup](#setup)
+  - [Building](#building)
+- [Contributing](#contributing)
+  - [Testing](#testing)
+  - [ScalaStyle](#scalastyle)
+- [License](#license)
+- [Authors](#authors)
+- [Inspiration](#inspiration)
+
 ## Documentation
 
 - [Why SNS+SQS?](docs/why-sns+sqs.md)
