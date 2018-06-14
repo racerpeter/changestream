@@ -14,9 +14,6 @@ object Testing {
   private lazy val testSettings =
     inConfig(Test)(Defaults.testSettings) ++
       Seq(
-// TODO: get scalastyle working again
-//        testScalastyle := org.scalastyle.sbt.ScalastylePlugin.scalastyle.in(Test).toTask("").value,
-//        (test in Test) <<= (test in Test) dependsOn testScalastyle,
         resourceDirectory in testScalastyle := baseDirectory.value / "src/test/resources",
         testOptions in Test := Seq(Tests.Filter(unitFilter))
       )

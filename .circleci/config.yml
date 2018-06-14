@@ -49,6 +49,9 @@ jobs:
             - "/root/current/target/streams"
             - "/root/current/project/target/resolution-cache"
             - "/root/current/project/target/streams"
+      - run:
+          name: Lint
+          command: sbt scalastyle
       - persist_to_workspace:
           root: /root
           paths:
