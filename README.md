@@ -114,7 +114,7 @@ from the command line, or run the test command in [IntelliJ](https://www.jetbrai
 
 ### ScalaStyle
 
-Changestream uses ScalaStyle for code linting--it is not automatic. Before submitting a PR, please take a look at the ScalaStyle output at the top of `sbt test` and correct any issues you find.
+Changestream uses ScalaStyle for code linting--it is not automatic. Before submitting a PR, please take a look at the output of the `sbt scalastyle` command and correct any issues you find.
 
 
 ## License
