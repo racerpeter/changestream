@@ -17,7 +17,7 @@ class ControlInterfaceActor extends Actor with ControlInterface {
   def receive = runRoute(controlRoutes)
 }
 
-trait   ControlInterface extends HttpService with DefaultJsonProtocol {
+trait ControlInterface extends HttpService with DefaultJsonProtocol {
   import ControlActor._
 
   protected val log = LoggerFactory.getLogger(getClass)
