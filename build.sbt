@@ -35,7 +35,7 @@ lazy val changestream = (project in file(".")).
     dockerfile in docker := {
       new Dockerfile {
         from("openjdk:8-jre")
-        entryPoint(s"/app/bin/${executableScriptName.value}")
+        entryPoint(s"/app/bin/${executableScriptName.value}", "-Dlogback.configurationFile=/app/conf/logback.xml")
         copy(stage.value, "/app")
       }
     },
