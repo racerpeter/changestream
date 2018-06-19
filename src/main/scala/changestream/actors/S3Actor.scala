@@ -126,6 +126,7 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
     Await.result(testPutFuture, TIMEOUT milliseconds)
     log.info(s"Ready to push messages to bucket ${BUCKET} with key prefix ${KEY_PREFIX}")
   }
+
   override def postStop() = {
     cancelDelayedFlush
 
