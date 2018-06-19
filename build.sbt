@@ -33,10 +33,40 @@ lazy val changestream = (project in file(".")).
     ),
     // docker settings
     dockerfile in docker := {
+      val jarFile = Keys.`package`.in(Compile, packageBin).value
+      val classpath = (managedClasspath in Compile).value
+      val confpath = (resourceDirectory in Compile).value.listFiles.toSeq
+      val mainclass = mainClass.in(Compile, packageBin).value.get
+      val lib = "/app/lib"
+      val conf = "/app/conf"
+      val jarTarget = "/app/" + jarFile.name
+
       new Dockerfile {
         from("openjdk:8-jre")
-        entryPoint(s"/app/bin/${executableScriptName.value}")
-        copy(stage.value, "/app")
+
+        // Copy all dependencies to 'libs' in the staging directory
+        (classpath.files).foreach { depFile =>
+          stageFile(depFile, file(lib) / depFile.name)
+        }
+        addRaw(lib, lib)
+
+        // Copy all configs to 'conf' in the staging directory
+        (confpath.get).foreach { confFile =>
+          stageFile(confFile, file(conf) / confFile.name)
+        }
+        addRaw(conf, conf)
+
+        // Add the generated jar file
+        add(jarFile, jarTarget)
+
+        // Set the entry point to start the application using the main class
+        cmd(
+          "java",
+          "-classpath", s"$lib/*:$jarTarget",
+          "-Dlogback.configurationFile=/app/conf/logback.xml",
+          "-Dconfig.file=/app/conf/application.conf",
+          mainclass
+        )
       }
     },
     libraryDependencies ++= Dependencies.libraryDependencies,
