@@ -11,6 +11,7 @@ object Dependencies {
     "com.typesafe" % "config" % "1.3.1",
     "org.slf4j" % "slf4j-api" % "1.7.25",
     "ch.qos.logback" % "logback-classic" % "1.1.11",
+    "org.fluentd" %% "fluent-logger-scala" % "0.7.0",
     // akka actor system
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,
     "com.typesafe.akka" %% "akka-agent" % akkaVersion,
