@@ -1,13 +1,16 @@
 package changestream.actors
 
-import akka.actor.Actor
+import akka.actor.{Actor, ActorRef, ActorRefFactory}
 import changestream.events.MutationWithInfo
 import com.typesafe.config.{Config, ConfigFactory}
 
-class StdoutActor(config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
+class StdoutActor(getNextHop: ActorRefFactory => ActorRef,
+                  config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
+  protected val nextHop = getNextHop(context)
+
   def receive = {
     case MutationWithInfo(mutation, _, _, Some(message: String)) =>
       println(message)
-      sender() ! akka.actor.Status.Success(message)
+      nextHop ! "TODO position"
   }
 }

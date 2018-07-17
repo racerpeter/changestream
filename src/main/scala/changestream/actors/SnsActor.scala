@@ -2,7 +2,7 @@ package changestream.actors
 
 import scala.language.postfixOps
 import scala.util.{Failure, Success}
-import akka.actor.Actor
+import akka.actor.{Actor, ActorRef, ActorRefFactory}
 import changestream.events.{MutationEvent, MutationWithInfo}
 import com.amazonaws.services.sns.AmazonSNSAsyncClient
 import com.amazonaws.services.sns.model.CreateTopicResult
@@ -24,7 +24,10 @@ object SnsActor {
   }
 }
 
-class SnsActor(config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
+class SnsActor(getNextHop: ActorRefFactory => ActorRef,
+               config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
+
+  protected val nextHop = getNextHop(context)
   protected val log = LoggerFactory.getLogger(getClass)
   protected implicit val ec = context.dispatcher
 
@@ -56,7 +59,7 @@ class SnsActor(config: Config = ConfigFactory.load().getConfig("changestream")) 
       request onComplete {
         case Success(result) =>
           log.debug(s"Successfully published message to ${topic} (messageId ${result.getMessageId})")
-          origSender ! akka.actor.Status.Success(result.getMessageId)
+          nextHop ! "TODO position"
         case Failure(exception) =>
           log.error(s"Failed to publish to topic ${topic}: ${exception.getMessage}")
           throw exception

@@ -17,7 +17,10 @@ object ChangeStreamEventListener extends EventListener {
   protected val whitelist: java.util.List[String] = new java.util.LinkedList[String]()
   protected val blacklist: java.util.List[String] = new java.util.LinkedList[String]()
 
-  @volatile protected var emitterLoader: (ActorRefFactory => ActorRef) = (_ => system.actorOf(Props(new StdoutActor()), name = "emitterActor"))
+  @volatile protected var positionSaverLoader: (ActorRefFactory => ActorRef) =
+    (_ => system.actorOf(Props(new PositionSaver()), name = "positionSaverActor"))
+  @volatile protected var emitterLoader: (ActorRefFactory => ActorRef) =
+    (_ => system.actorOf(Props(new StdoutActor(positionSaverLoader)), name = "emitterActor"))
 
   protected lazy val formatterActor = system.actorOf(Props(new JsonFormatterActor(emitterLoader)), name = "formatterActor")
   protected lazy val columnInfoActor = system.actorOf(Props(new ColumnInfoActor(_ => formatterActor)), name = "columnInfoActor")
@@ -41,23 +44,24 @@ object ChangeStreamEventListener extends EventListener {
       log.info(s"Using event blacklist: ${blacklist}")
     }
 
-    if(config.hasPath("emitter")) {
-      val classString = config.getString("emitter")
+    if(config.hasPath("position-saver")) {
+      createActor(config.getString("position-saver"), "positionSaverActor", config).
+        foreach(actorRef => setPositionSaverLoader(_ => actorRef))
+    }
 
-      try {
-        val emitterConstructor = Class.forName(classString).asInstanceOf[Class[Actor]].getDeclaredConstructors.head
-        lazy val actorInstance = emitterConstructor.newInstance(config).asInstanceOf[Actor]
-        val actorRef = system.actorOf(Props(actorInstance), name = "emitterActor")
-        setEmitterLoader(_ => {
-          actorRef
-        })
-      }
-      catch {
-        case e: ClassNotFoundException =>
-          log.error(s"Couldn't load emitter class ${classString} (ClassNotFoundException), using the default emitter.")
-      }
+    if(config.hasPath("emitter")) {
+      createActor(config.getString("emitter"), "emitterActor", positionSaverLoader, config).
+        foreach(actorRef => setEmitterLoader(_ => actorRef))
     }
   }
+
+  /** Allows the position saver actor to be configured at runtime.
+    *
+    * Note: you must initialize the position saver before the emitter, or it will be ignored
+    *
+    * @param loader A lamda that returns your actor ref
+    */
+  def setPositionSaverLoader(loader: (ActorRefFactory => ActorRef)) = positionSaverLoader = loader
 
   /** Allows the emitter/producer actor to be configured at runtime.
     *
@@ -192,6 +196,19 @@ object ChangeStreamEventListener extends EventListener {
     case '`' => escaped.substring(1, escaped.length - 1).replace("``", "`")
     case '"' => escaped.substring(1, escaped.length - 1).replace("\"\"", "\"")
     case _ => escaped
+  }
+
+  private def createActor(classString: String, actorName: String, args: Object*):Option[ActorRef] = {
+    try {
+      val constructor = Class.forName(classString).asInstanceOf[Class[Actor]].getDeclaredConstructors.head
+      lazy val actorInstance = constructor.newInstance(args: _*).asInstanceOf[Actor]
+      Some(system.actorOf(Props(actorInstance), name = actorName))
+    }
+    catch {
+      case e: ClassNotFoundException =>
+        log.error(s"Couldn't load emitter class ${classString} (ClassNotFoundException), using the default emitter.")
+        None
+    }
   }
 
   private def shouldIgnore(info: MutationEvent) = {
