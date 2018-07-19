@@ -64,9 +64,12 @@ lazy val changestream = (project in file(".")).
           "java",
           "-classpath", s"$lib/*:$jarTarget",
           "-Dlogback.configurationFile=/app/conf/logback.xml",
-          "-Dconfig.file=/app/conf/application.conf",
-          mainclass
+          "-Dconfig.file=/app/conf/application.conf"
         )
+        
+        // By default use the main class as the cmd. Allows us to optionally add to the java command line by overriding the CMD
+        // Example: CMD ["-Xms1024m", "changestream.ChangeStream"]
+        cmd(mainclass)
       }
     },
     libraryDependencies ++= Dependencies.libraryDependencies,
