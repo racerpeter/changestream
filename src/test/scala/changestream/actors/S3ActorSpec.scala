@@ -28,7 +28,7 @@ class S3ActorSpec extends Emitter with Config {
   }
 
   "When S3Actor receives multiple valid messages in quick succession" should {
-    "Add the messages to S3 in a batch of multiple" in {
+    "Add the messages to S3 in a batch of many" in {
       actorRef ! message
       actorRef ! message
 
