@@ -62,6 +62,7 @@ lazy val changestream = (project in file(".")).
         // Set the entry point to start the application using the main class
         cmd(
           "java",
+          "$JAVA_OPTS",
           "-classpath", s"$lib/*:$jarTarget",
           "-Dlogback.configurationFile=/app/conf/logback.xml",
           "-Dconfig.file=/app/conf/application.conf",
