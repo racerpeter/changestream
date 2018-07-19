@@ -70,7 +70,7 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
 
   override def preStart() = {
     val url = Await.result(queueUrl, TIMEOUT milliseconds)
-    log.info(s"Connected to SNS topic ${sqsQueue} with ARN ${url}")
+    log.info(s"Connected to SQS queue ${sqsQueue} with ARN ${url}")
   }
   override def postStop() = cancelDelayedFlush
 

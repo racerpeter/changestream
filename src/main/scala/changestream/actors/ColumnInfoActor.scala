@@ -105,7 +105,8 @@ class ColumnInfoActor (
       columnsInfoCache(columnsInfo.cacheKey) = columnsInfo
 
       mutationBuffer.remove(columnsInfo.cacheKey).foreach({ bufferedMutations =>
-        // only satisfy mutations that came in after this column info was requested to avoid timing issues with several alters on the same table in quick succession
+        // only satisfy mutations that came in after this column info was requested to avoid timing
+        // issues with several alters on the same table in quick succession
         val (ready, stillPending) = bufferedMutations.partition(mutation => columnsInfo.schemaSequence <= mutation.schemaSequence)
         mutationBuffer.put(columnsInfo.cacheKey, stillPending)
 

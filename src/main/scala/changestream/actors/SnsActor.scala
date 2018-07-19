@@ -46,13 +46,25 @@ class SnsActor(getNextHop: ActorRefFactory => ActorRef,
   )
   protected val topicArns = mutable.HashMap.empty[String, Future[CreateTopicResult]]
 
+  protected def getOrCreateTopic(topic: String) = {
+    val ret = client.createTopic(topic)
+    ret onComplete {
+      case Success(topicResult) =>
+        log.info(s"Ready to publish messages to SNS topic ${topic} (${topicResult.getTopicArn}).")
+      case Failure(exception) =>
+        log.error(s"Failed to find/create SNS topic ${topic}.", exception.getMessage)
+        throw exception
+    }
+    ret
+  }
+
   def receive = {
     case MutationWithInfo(mutation, _, _, Some(message: String)) =>
       log.debug(s"Received message: ${message}")
 
       val origSender = sender()
       val topic = SnsActor.getTopic(mutation, snsTopic, snsTopicHasVariable)
-      val topicArn = topicArns.getOrElse(topic, client.createTopic(topic))
+      val topicArn = topicArns.getOrElse(topic, getOrCreateTopic(topic))
       topicArns.update(topic, topicArn)
 
       val request = topicArn.flatMap(topic => client.publish(topic.getTopicArn, message))
