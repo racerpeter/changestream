@@ -17,6 +17,7 @@ object PositionSaver {
   case object SavePositionRequest
   case class GetPositionRequest(origSender: ActorRef)
   case class GetPositionResponse(position: String)
+  case class EmitterResult(position: String, meta: Option[Any] = None)
 }
 
 class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {

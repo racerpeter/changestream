@@ -1,6 +1,7 @@
 package changestream.actors
 
 import akka.actor.{Actor, ActorRef, ActorRefFactory}
+import changestream.actors.PositionSaver.EmitterResult
 import changestream.events.MutationWithInfo
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -9,8 +10,8 @@ class StdoutActor(getNextHop: ActorRefFactory => ActorRef,
   protected val nextHop = getNextHop(context)
 
   def receive = {
-    case MutationWithInfo(mutation, _, _, Some(message: String)) =>
+    case MutationWithInfo(_, _, _, Some(message: String)) =>
       println(message)
-      nextHop ! "TODO position"
+      nextHop ! EmitterResult("TODO position")
   }
 }

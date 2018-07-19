@@ -2,6 +2,7 @@ package changestream.actors
 
 import akka.actor.{ActorRefFactory, Props}
 import akka.testkit.{TestActorRef, TestProbe}
+import changestream.actors.PositionSaver.EmitterResult
 import changestream.helpers.{Config, Emitter}
 import com.typesafe.config.ConfigFactory
 
@@ -24,7 +25,7 @@ class SnsActorSpec extends Emitter with Config {
     "Immediately publish the message to SNS" in {
       actorRef ! message
 
-      probe.expectMsgType[String](5000 milliseconds)
+      probe.expectMsgType[EmitterResult](5000 milliseconds)
     }
   }
 
@@ -32,7 +33,7 @@ class SnsActorSpec extends Emitter with Config {
     "Should correctly publish the message when the topic contains interpolated database and/or tableName" in {
       snsWithInterpolation ! message
 
-      probe.expectMsgType[String](5000 milliseconds)
+      probe.expectMsgType[EmitterResult](5000 milliseconds)
     }
   }
 }

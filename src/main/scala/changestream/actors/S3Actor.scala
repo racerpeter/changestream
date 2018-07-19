@@ -7,6 +7,7 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Failure, Success}
 import akka.actor.{Actor, ActorRef, ActorRefFactory, Cancellable}
+import changestream.actors.PositionSaver.EmitterResult
 import changestream.events.MutationWithInfo
 import com.amazonaws.ClientConfiguration
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain
@@ -170,7 +171,7 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
       case Success(result: PutObjectResult) =>
         log.info(s"Successfully saved ${batchSize} messages (${file.length} bytes) to ${s3Url}.")
         file.delete()
-        nextHop ! "TODO position"
+        nextHop ! EmitterResult("TODO position", Some(file.getName))
       case Failure(exception) =>
         log.error(s"Failed to save ${batchSize} messages from ${file.getName} (${file.length} bytes) to ${s3Url}: ${exception.getMessage}")
         throw exception

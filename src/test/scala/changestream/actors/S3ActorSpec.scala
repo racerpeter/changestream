@@ -2,6 +2,7 @@ package changestream.actors
 
 import akka.actor.{ActorRefFactory, Props}
 import akka.testkit.{TestActorRef, TestProbe}
+import changestream.actors.PositionSaver.EmitterResult
 import changestream.helpers.{Config, Emitter}
 
 import scala.concurrent.duration._
@@ -21,7 +22,8 @@ class S3ActorSpec extends Emitter with Config {
     "Add the message to S3 in a batch of one" in {
       actorRef ! message
 
-      val result = probe.expectMsgType[String](5000 milliseconds)
+      val result = probe.expectMsgType[EmitterResult](5000 milliseconds)
+      result.meta.get.asInstanceOf[String] should endWith ("-1.json")
     }
   }
 
@@ -30,7 +32,8 @@ class S3ActorSpec extends Emitter with Config {
       actorRef ! message
       actorRef ! message
 
-      val result = probe.expectMsgType[String](5000 milliseconds)
+      val result = probe.expectMsgType[EmitterResult](5000 milliseconds)
+      result.meta.get.asInstanceOf[String] should endWith ("-2.json")
     }
   }
 
@@ -40,8 +43,10 @@ class S3ActorSpec extends Emitter with Config {
       Thread.sleep(2000)
       actorRef ! message
 
-      val result1 = probe.expectMsgType[String](5000 milliseconds)
-      val result2 = probe.expectMsgType[String](5000 milliseconds)
+      val result1 = probe.expectMsgType[EmitterResult](5000 milliseconds)
+      val result2 = probe.expectMsgType[EmitterResult](5000 milliseconds)
+      result1.meta.get.asInstanceOf[String] should endWith ("-1.json")
+      result2.meta.get.asInstanceOf[String] should endWith ("-1.json")
     }
   }
 
@@ -51,8 +56,10 @@ class S3ActorSpec extends Emitter with Config {
       actorRef ! message
       actorRef ! message
 
-      val result1 = probe.expectMsgType[String](5000 milliseconds)
-      val result2 = probe.expectMsgType[String](5000 milliseconds)
+      val result1 = probe.expectMsgType[EmitterResult](5000 milliseconds)
+      val result2 = probe.expectMsgType[EmitterResult](5000 milliseconds)
+      result1.meta.get.asInstanceOf[String] should endWith ("-2.json")
+      result2.meta.get.asInstanceOf[String] should endWith ("-1.json")
     }
   }
 }

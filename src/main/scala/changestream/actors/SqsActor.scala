@@ -5,6 +5,7 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Failure, Success}
 import akka.actor.{Actor, ActorRef, ActorRefFactory, Cancellable}
+import changestream.actors.PositionSaver.EmitterResult
 import changestream.events.MutationWithInfo
 import com.amazonaws.services.sqs.AmazonSQSAsyncClient
 import com.amazonaws.services.sqs.model.SendMessageBatchResult
@@ -111,7 +112,7 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
           log.debug(s"Successfully sent message batch to ${sqsQueue} " +
             s"(sent: ${result.getSuccessful.size()}, failed: ${failed.size()})")
         }
-        nextHop ! "TODO position"
+        nextHop ! EmitterResult("TODO position", Some(result))
       case Failure(exception) =>
         log.error(s"Failed to send message batch to ${sqsQueue}: ${exception.getMessage}", exception)
         throw exception

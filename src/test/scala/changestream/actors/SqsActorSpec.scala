@@ -2,6 +2,7 @@ package changestream.actors
 
 import akka.actor.{ActorRefFactory, Props}
 import akka.testkit.{TestActorRef, TestProbe}
+import changestream.actors.PositionSaver.EmitterResult
 import changestream.actors.SqsActor.BatchResult
 import changestream.helpers.{Config, Emitter}
 
@@ -17,9 +18,10 @@ class SqsActorSpec extends Emitter with Config {
     "Add the message to the SQS queue in a batch of one" in {
       actorRef ! message
 
-      val result = probe.expectMsgType[BatchResult](5000 milliseconds)
-      result.failed shouldBe empty
-      result.queued should have length 1
+      val result = probe.expectMsgType[EmitterResult](5000 milliseconds)
+      result.meta.get shouldBe a[BatchResult]
+      result.meta.get.asInstanceOf[BatchResult].failed shouldBe empty
+      result.meta.get.asInstanceOf[BatchResult].queued should have length 1
     }
   }
 
@@ -28,9 +30,10 @@ class SqsActorSpec extends Emitter with Config {
       actorRef ! message
       actorRef ! message
 
-      val result = probe.expectMsgType[BatchResult](5000 milliseconds)
-      result.asInstanceOf[BatchResult].failed shouldBe empty
-      result.asInstanceOf[BatchResult].queued should have length 2
+      val result = probe.expectMsgType[EmitterResult](5000 milliseconds)
+      result.meta.get shouldBe a[BatchResult]
+      result.meta.get.asInstanceOf[BatchResult].failed shouldBe empty
+      result.meta.get.asInstanceOf[BatchResult].queued should have length 2
     }
   }
 
@@ -40,16 +43,16 @@ class SqsActorSpec extends Emitter with Config {
       Thread.sleep(500)
       actorRef ! message
 
-      val result1 = probe.expectMsgType[BatchResult](5000 milliseconds)
-      val result2 = probe.expectMsgType[BatchResult](5000 milliseconds)
+      val result1 = probe.expectMsgType[EmitterResult](5000 milliseconds)
+      val result2 = probe.expectMsgType[EmitterResult](5000 milliseconds)
 
-      result1 shouldBe a[BatchResult]
-      result1.asInstanceOf[BatchResult].failed shouldBe empty
-      result1.asInstanceOf[BatchResult].queued should have length 1
+      result1.meta.get shouldBe a[BatchResult]
+      result1.meta.get.asInstanceOf[BatchResult].failed shouldBe empty
+      result1.meta.get.asInstanceOf[BatchResult].queued should have length 1
 
-      result2 shouldBe a[BatchResult]
-      result2.asInstanceOf[BatchResult].failed shouldBe empty
-      result2.asInstanceOf[BatchResult].queued should have length 1
+      result2.meta.get shouldBe a[BatchResult]
+      result2.meta.get.asInstanceOf[BatchResult].failed shouldBe empty
+      result2.meta.get.asInstanceOf[BatchResult].queued should have length 1
     }
   }
 }
