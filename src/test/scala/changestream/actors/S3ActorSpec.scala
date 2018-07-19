@@ -5,9 +5,7 @@ import akka.testkit.{TestActorRef, TestProbe}
 import changestream.helpers.{Config, Emitter}
 
 import scala.concurrent.duration._
-import org.scalatest._
-import Matchers._
-import com.typesafe.config.{ConfigFactory, ConfigValue}
+import com.typesafe.config.ConfigFactory
 
 import scala.language.postfixOps
 
@@ -24,7 +22,6 @@ class S3ActorSpec extends Emitter with Config {
       actorRef ! message
 
       val result = probe.expectMsgType[String](5000 milliseconds)
-      result.toString should endWith ("-1.json")
     }
   }
 
@@ -34,7 +31,6 @@ class S3ActorSpec extends Emitter with Config {
       actorRef ! message
 
       val result = probe.expectMsgType[String](5000 milliseconds)
-      result.toString should endWith ("-2.json")
     }
   }
 
@@ -46,9 +42,6 @@ class S3ActorSpec extends Emitter with Config {
 
       val result1 = probe.expectMsgType[String](5000 milliseconds)
       val result2 = probe.expectMsgType[String](5000 milliseconds)
-
-      result1.toString should endWith ("-1.json")
-      result2.toString should endWith ("-1.json")
     }
   }
 
@@ -60,9 +53,6 @@ class S3ActorSpec extends Emitter with Config {
 
       val result1 = probe.expectMsgType[String](5000 milliseconds)
       val result2 = probe.expectMsgType[String](5000 milliseconds)
-
-      result1.toString should endWith ("-2.json")
-      result2.toString should endWith ("-1.json")
     }
   }
 }

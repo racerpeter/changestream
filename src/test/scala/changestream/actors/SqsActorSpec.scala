@@ -4,7 +4,6 @@ import akka.actor.{ActorRefFactory, Props}
 import akka.testkit.{TestActorRef, TestProbe}
 import changestream.actors.SqsActor.BatchResult
 import changestream.helpers.{Config, Emitter}
-import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
