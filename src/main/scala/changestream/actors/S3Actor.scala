@@ -66,12 +66,12 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
   // Wrap the Java IO
   protected def getNextFile = BUFFER_TEMP_DIR match {
     case "" =>
-      File.createTempFile("-buffer", ".json")
+      File.createTempFile("buffer-", ".json")
     case _ if bufferDirectory.exists && bufferDirectory.canWrite =>
-      File.createTempFile("-buffer", ".json", bufferDirectory)
+      File.createTempFile("buffer-", ".json", bufferDirectory)
     case _ =>
       log.error(s"Failed to write to buffer directory ${bufferDirectory}, make sure it exists and is writeable. Using the system default temp dir instead.")
-      File.createTempFile("-buffer", ".json")
+      File.createTempFile("buffer-", ".json")
   }
   protected def getWriterForFile = {
     val streamWriter = new OutputStreamWriter(new FileOutputStream(bufferFile), StandardCharsets.UTF_8)
@@ -172,7 +172,7 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
       case Success(result: PutObjectResult) =>
         log.info(s"Successfully saved ${batchSize} messages (${file.length} bytes) to ${s3Url}.")
         file.delete()
-        nextHop ! EmitterResult("TODO position", Some(file.getName))
+        nextHop ! EmitterResult("TODO position", Some(s3Url))
       case Failure(exception) =>
         log.error(s"Failed to save ${batchSize} messages from ${file.getName} (${file.length} bytes) to ${s3Url}: ${exception.getMessage}")
         throw exception
