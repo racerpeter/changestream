@@ -112,7 +112,7 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
           log.debug(s"Successfully sent message batch to ${sqsQueue} " +
             s"(sent: ${result.getSuccessful.size()}, failed: ${failed.size()})")
         }
-        nextHop ! EmitterResult("TODO position", Some(result))
+        nextHop ! EmitterResult("TODO position", Some(getBatchResult(result)))
       case Failure(exception) =>
         log.error(s"Failed to send message batch to ${sqsQueue}: ${exception.getMessage}", exception)
         throw exception
