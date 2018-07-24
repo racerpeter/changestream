@@ -44,8 +44,8 @@ object ChangeStreamEventListener extends EventListener {
       log.info(s"Using event blacklist: ${blacklist}")
     }
 
-    if(config.hasPath("position-saver")) {
-      createActor(config.getString("position-saver"), "positionSaverActor", config).
+    if(config.hasPath("position-saver.actor")) {
+      createActor(config.getString("position-saver.actor"), "positionSaverActor", config).
         foreach(actorRef => setPositionSaverLoader(_ => actorRef))
     }
 

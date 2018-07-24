@@ -12,11 +12,10 @@ import org.slf4j.LoggerFactory
 
 import scala.io.Source
 
-// TODO Specs
 object PositionSaver {
-  case object SavePositionRequest
-  case class GetPositionRequest(origSender: ActorRef)
-  case class GetPositionResponse(position: String)
+  case class SavePositionRequest(positionOverride: Option[String])
+  case object GetPositionRequest
+  case class GetPositionResponse(position: Option[String])
   case class EmitterResult(position: String, meta: Option[Any] = None)
 }
 
@@ -35,24 +34,41 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
   protected var cancellableSchedule: Option[Cancellable] = None
   protected def setDelayedSave(origSender: ActorRef) = {
     val scheduler = context.system.scheduler
-    cancellableSchedule = Some(scheduler.scheduleOnce(MAX_WAIT) { self ! SavePositionRequest })
+    cancellableSchedule = MAX_WAIT.length match {
+      case 0 => None
+      case _ => Some(scheduler.scheduleOnce(MAX_WAIT) { self ! SavePositionRequest })
+    }
   }
   protected def cancelDelayedSave = cancellableSchedule.foreach(_.cancel())
 
   // Mutable State!!
   protected var currentRecordCount = 0
-  protected var currentPosition = ""
+  protected var currentPosition: Option[String] = None
   // End Mutable State!!
 
-  def writePosition(position: String) = {
+  private def readPosition: Option[String] = {
+    val bufferedSource = Source.fromFile(saverFile, "UTF-8")
+    val position = bufferedSource.getLines.mkString match {
+      case "" => None
+      case str:String => Some(str)
+    }
+    bufferedSource.close
+    position
+  }
+
+  def writePosition(position: Option[String], sender: ActorRef = ActorRef.noSender) = {
     try {
       val saverOutputStream = new FileOutputStream(saverFile)
       val saverWriter = new OutputStreamWriter(saverOutputStream, StandardCharsets.UTF_8)
-      saverWriter.write(position)
+      saverWriter.write(position match {
+        case None => "" //TODO none and empty string mean the same thing right now. Is this cool?
+        case Some(str) => str
+      })
       saverWriter.close()
     } catch {
       case exception: IOException =>
         log.error(s"Failed to write position to position file (${SAVER_FILE_PATH}): ${exception.getMessage}")
+        sender ! akka.actor.Status.Failure(exception)
         throw exception
     }
   }
@@ -60,9 +76,7 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
   override def preStart() = {
     if(saverFile.exists()) {
       try {
-        val bufferedSource = Source.fromFile(saverFile, "UTF-8")
-        currentPosition = bufferedSource.getLines.mkString
-        bufferedSource.close
+        currentPosition = readPosition
       } catch {
         case exception: IOException =>
           log.error(s"Failed to read position from position file (${SAVER_FILE_PATH}): ${exception.getMessage}")
@@ -71,28 +85,35 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
     }
 
     writePosition(currentPosition) //make sure we can write to the file (write back position)
-    log.debug(s"Ready to save positions to file ${SAVER_FILE_PATH}.")
+    log.info(s"Ready to save positions to file ${SAVER_FILE_PATH}.")
   }
 
   override def postStop() = cancelDelayedSave
 
   def receive = {
-    case MutationWithInfo(mutation, _, _, Some(_: String)) =>
-      log.debug(s"Received message with sequence number: ${mutation.sequence}")
+    case EmitterResult(position, meta) =>
+      log.debug(s"Received position: ${position}")
 
       cancelDelayedSave
       currentRecordCount += 1
-      currentPosition = ""
+      currentPosition = Some(position)
 
       currentRecordCount match {
-        case MAX_RECORDS => self ! SavePositionRequest
-        case _ => setDelayedSave(sender())
+        case MAX_RECORDS =>
+          currentRecordCount = 0
+          writePosition(currentPosition, sender())
+        case _ =>
+          setDelayedSave(sender())
       }
 
-    case SavePositionRequest =>
-      writePosition(currentPosition)
+    case SavePositionRequest(Some(overridePosition: String)) =>
+      currentPosition = Some(overridePosition)
+      writePosition(currentPosition, sender())
 
-    case GetPositionRequest(requester: ActorRef) =>
-      requester ! GetPositionResponse(currentPosition)
+    case SavePositionRequest =>
+      writePosition(currentPosition, sender())
+
+    case GetPositionRequest =>
+      sender() ! GetPositionResponse(currentPosition)
   }
 }
