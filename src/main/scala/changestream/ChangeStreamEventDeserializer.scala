@@ -7,6 +7,24 @@ import changestream.events.{Delete, Insert, Update}
 import com.github.shyiko.mysql.binlog.event._
 import com.github.shyiko.mysql.binlog.event.deserialization._
 import com.github.shyiko.mysql.binlog.io.ByteArrayInputStream
+import com.typesafe.config.{Config, ConfigFactory}
+
+object ChangestreamEventDeserializerConfig {
+  // TODO refactor this to not be so gross. consider a global config singleton that we can use everywhere
+  protected var _config:Option[Config] = None
+  protected val defaultSqlCharacterLimit = 0 // this default needs to be in sync with the application.conf default
+  protected var _sqlCharacterLimit:Int = defaultSqlCharacterLimit
+  def config = _config.getOrElse(ConfigFactory.load().getConfig("changestream"))
+  def setConfig(config: Config) = {
+    _config = Some(config)
+    _sqlCharacterLimit = config.hasPath("sql-character-limit") match {
+      case true => config.getInt("sql-character-limit")
+      case false => defaultSqlCharacterLimit
+    }
+  }
+
+  def sqlCharacterLimit = _sqlCharacterLimit
+}
 
 object ChangestreamEventDeserializer extends {
   val tableMapData = new util.HashMap[java.lang.Long, TableMapEventData]
@@ -116,7 +134,13 @@ object RowsQueryDeserializer extends EventDataDeserializer[EventData] {
   override def deserialize(inputStream: ByteArrayInputStream) = {
     inputStream.skip(1)
     val len = inputStream.available()
-    val query = inputStream.readString(len)
+
+    val query = ChangestreamEventDeserializerConfig.sqlCharacterLimit match {
+      case 0 => inputStream.readString(len)
+      case limit => inputStream.readString(len.min(limit))
+    }
+    inputStream.skipToTheEndOfTheBlock()
+
     ChangestreamEventDeserializer.lastQuery = Some(query)
 
     null //scalastyle:ignore
