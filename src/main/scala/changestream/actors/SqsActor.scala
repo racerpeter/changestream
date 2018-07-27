@@ -34,7 +34,11 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
   protected val TIMEOUT = config.getLong("aws.timeout")
 
 
+  // Mutable State!
   protected var cancellableSchedule: Option[Cancellable] = None
+  protected var lastPosition:String = ""
+  // End Mutable State
+
   protected def setDelayedFlush(origSender: ActorRef) = {
     val scheduler = context.system.scheduler
     cancellableSchedule = Some(scheduler.scheduleOnce(MAX_WAIT) { self ! FlushRequest(origSender) })
@@ -75,11 +79,12 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
   override def postStop() = cancelDelayedFlush
 
   def receive = {
-    case MutationWithInfo(mutation, _, _, Some(message: String)) =>
+    case MutationWithInfo(_, pos, _, _, Some(message: String)) =>
       log.debug(s"Received message: ${message}")
 
       cancelDelayedFlush
 
+      lastPosition = pos
       messageBuffer += message
       messageBuffer.size match {
         case LIMIT => flush(sender())
@@ -92,6 +97,8 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
 
   protected def flush(origSender: ActorRef) = {
     log.debug(s"Flushing ${messageBuffer.length} messages to SQS.")
+
+    val position = lastPosition
 
     val request = for {
       url <- queueUrl
@@ -112,7 +119,7 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
           log.debug(s"Successfully sent message batch to ${sqsQueue} " +
             s"(sent: ${result.getSuccessful.size()}, failed: ${failed.size()})")
         }
-        nextHop ! EmitterResult("TODO position", Some(getBatchResult(result)))
+        nextHop ! EmitterResult(position, Some(getBatchResult(result)))
       case Failure(exception) =>
         log.error(s"Failed to send message batch to ${sqsQueue}: ${exception.getMessage}", exception)
         throw exception

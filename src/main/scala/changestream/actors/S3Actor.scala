@@ -58,6 +58,7 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
   )
 
   // Mutable State!!
+  protected var lastPosition = ""
   protected var currentBatchSize = 0
   protected var bufferFile: File = getNextFile
   protected var bufferWriter: BufferedWriter = getWriterForFile
@@ -141,11 +142,12 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
   }
 
   def receive = {
-    case MutationWithInfo(mutation, _, _, Some(message: String)) =>
+    case MutationWithInfo(mutation, pos, _, _, Some(message: String)) =>
       log.debug(s"Received message: ${message}")
 
       cancelDelayedFlush
 
+      lastPosition = pos
       bufferMessage(message)
       currentBatchSize match {
         case BATCH_SIZE => flush(sender())
@@ -158,6 +160,8 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
 
   protected def flush(origSender: ActorRef) = {
     log.debug(s"Flushing ${currentBatchSize} messages to S3.")
+
+    val position = lastPosition
 
     val batchSize = currentBatchSize
     val now = DateTime.now
@@ -172,7 +176,7 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
       case Success(result: PutObjectResult) =>
         log.info(s"Successfully saved ${batchSize} messages (${file.length} bytes) to ${s3Url}.")
         file.delete()
-        nextHop ! EmitterResult("TODO position", Some(s3Url))
+        nextHop ! EmitterResult(position, Some(s3Url))
       case Failure(exception) =>
         log.error(s"Failed to save ${batchSize} messages from ${file.getName} (${file.length} bytes) to ${s3Url}: ${exception.getMessage}")
         throw exception

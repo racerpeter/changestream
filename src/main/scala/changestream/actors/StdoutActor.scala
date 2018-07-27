@@ -10,8 +10,8 @@ class StdoutActor(getNextHop: ActorRefFactory => ActorRef,
   protected val nextHop = getNextHop(context)
 
   def receive = {
-    case MutationWithInfo(_, _, _, Some(message: String)) =>
+    case MutationWithInfo(_, pos, _, _, Some(message: String)) =>
       println(message)
-      nextHop ! EmitterResult("TODO position")
+      nextHop ! EmitterResult(pos)
   }
 }

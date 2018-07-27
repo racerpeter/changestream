@@ -62,7 +62,7 @@ class ColumnInfoActorSpec extends Database {
       columnInfoActor ! m1ni
 
       inside(probe.expectMsgType[MutationWithInfo](connectionTimeout milliseconds)) {
-        case MutationWithInfo(m, tx, cols, _) =>
+        case MutationWithInfo(m, pos, tx, cols, _) =>
           m should be(m1ni.mutation)
           tx should be(m1ni.transaction)
           cols should not be empty
@@ -82,7 +82,7 @@ class ColumnInfoActorSpec extends Database {
       columnInfoActor ! m2ni
 
       inside(probe.expectMsgType[MutationWithInfo](connectionTimeout milliseconds)) {
-        case MutationWithInfo(m, tx, cols, _) =>
+        case MutationWithInfo(m, pos, tx, cols, _) =>
           m should be(m2ni.mutation)
           tx should be(m2ni.transaction)
           cols should not be empty
@@ -102,7 +102,7 @@ class ColumnInfoActorSpec extends Database {
       columnInfoActor ! m3ni
 
       inside(probe.expectMsgType[MutationWithInfo](connectionTimeout milliseconds)) {
-        case MutationWithInfo(m, tx, cols, _) =>
+        case MutationWithInfo(m, pos, tx, cols, _) =>
           m should be(m3ni.mutation)
           tx should be(m3ni.transaction)
           cols should not be empty
@@ -124,7 +124,7 @@ class ColumnInfoActorSpec extends Database {
       columnInfoActor ! m1ni
 
       inside(probe.expectMsgType[MutationWithInfo](connectionTimeout milliseconds)) {
-        case MutationWithInfo(m, tx, cols, _) =>
+        case MutationWithInfo(m, pos, tx, cols, _) =>
           m should be(m1ni.mutation)
           tx should be(m1ni.transaction)
           cols should not be empty

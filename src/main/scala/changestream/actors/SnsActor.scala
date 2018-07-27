@@ -59,7 +59,7 @@ class SnsActor(getNextHop: ActorRefFactory => ActorRef,
   }
 
   def receive = {
-    case MutationWithInfo(mutation, _, _, Some(message: String)) =>
+    case MutationWithInfo(mutation, pos, _, _, Some(message: String)) =>
       log.debug(s"Received message: ${message}")
 
       val origSender = sender()
@@ -72,7 +72,7 @@ class SnsActor(getNextHop: ActorRefFactory => ActorRef,
       request onComplete {
         case Success(result) =>
           log.debug(s"Successfully published message to ${topic} (messageId ${result.getMessageId})")
-          nextHop ! EmitterResult("TODO position")
+          nextHop ! EmitterResult(pos)
         case Failure(exception) =>
           log.error(s"Failed to publish to topic ${topic}: ${exception.getMessage}")
           throw exception

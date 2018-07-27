@@ -13,8 +13,11 @@ import org.slf4j.LoggerFactory
 import scala.io.Source
 
 object PositionSaver {
+  // TODO: position should be a struct
+  // TODO: gtid support
   case class SavePositionRequest(positionOverride: Option[String])
   case object GetPositionRequest
+  case object GetLastSavedPositionRequest
   case class GetPositionResponse(position: Option[String])
   case class EmitterResult(position: String, meta: Option[Any] = None)
 }
@@ -47,16 +50,27 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
   // End Mutable State!!
 
   private def readPosition: Option[String] = {
-    val bufferedSource = Source.fromFile(saverFile, "UTF-8")
-    val position = bufferedSource.getLines.mkString match {
-      case "" => None
-      case str:String => Some(str)
+    if(saverFile.exists()) {
+      try {
+        val bufferedSource = Source.fromFile(saverFile, "UTF-8")
+        val position = bufferedSource.getLines.mkString match {
+          case "" => None
+          case str:String => Some(str)
+        }
+        bufferedSource.close
+        position
+      } catch {
+        case exception: IOException =>
+          log.error(s"Failed to read position from position file (${SAVER_FILE_PATH}): ${exception.getMessage}")
+          throw exception
+      }
     }
-    bufferedSource.close
-    position
+    else {
+      None
+    }
   }
 
-  def writePosition(position: Option[String], sender: ActorRef = ActorRef.noSender) = {
+  def writePosition(position: Option[String], sender: Option[ActorRef] = None) = {
     try {
       val saverOutputStream = new FileOutputStream(saverFile)
       val saverWriter = new OutputStreamWriter(saverOutputStream, StandardCharsets.UTF_8)
@@ -65,25 +79,17 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
         case Some(str) => str
       })
       saverWriter.close()
+      sender.map(_ ! akka.actor.Status.Success(position))
     } catch {
       case exception: IOException =>
         log.error(s"Failed to write position to position file (${SAVER_FILE_PATH}): ${exception.getMessage}")
-        sender ! akka.actor.Status.Failure(exception)
+        sender.map(_ ! akka.actor.Status.Failure(exception))
         throw exception
     }
   }
 
   override def preStart() = {
-    if(saverFile.exists()) {
-      try {
-        currentPosition = readPosition
-      } catch {
-        case exception: IOException =>
-          log.error(s"Failed to read position from position file (${SAVER_FILE_PATH}): ${exception.getMessage}")
-          throw exception
-      }
-    }
-
+    currentPosition = readPosition
     writePosition(currentPosition) //make sure we can write to the file (write back position)
     log.info(s"Ready to save positions to file ${SAVER_FILE_PATH}.")
   }
@@ -101,19 +107,22 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
       currentRecordCount match {
         case MAX_RECORDS =>
           currentRecordCount = 0
-          writePosition(currentPosition, sender())
+          writePosition(currentPosition, Some(sender()))
         case _ =>
           setDelayedSave(sender())
       }
 
     case SavePositionRequest(Some(overridePosition: String)) =>
       currentPosition = Some(overridePosition)
-      writePosition(currentPosition, sender())
+      writePosition(currentPosition, Some(sender()))
 
     case SavePositionRequest =>
-      writePosition(currentPosition, sender())
+      writePosition(currentPosition, Some(sender()))
 
     case GetPositionRequest =>
       sender() ! GetPositionResponse(currentPosition)
+
+    case GetLastSavedPositionRequest =>
+      sender() ! GetPositionResponse(readPosition)
   }
 }

@@ -22,7 +22,7 @@ class App extends Database with Config {
   }
 
   override def beforeAll(): Unit = {
-    ChangeStreamEventListener.setEmitterLoader(_ => probe.ref)
+    ChangeStreamEventListener.setEmitter(probe.ref)
     initialize
     ConfigFactory.invalidateCaches()
     app.start()

@@ -1,13 +1,19 @@
 package changestream
 
 import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, Props}
+import akka.util.Timeout
+import changestream.actors.PositionSaver.{GetPositionRequest, GetPositionResponse, SavePositionRequest}
 import changestream.actors._
 import changestream.events._
+
+import scala.concurrent.duration._
 import com.github.shyiko.mysql.binlog.event._
 import com.github.shyiko.mysql.binlog.BinaryLogClient.EventListener
 import com.github.shyiko.mysql.binlog.event.EventType._
 import org.slf4j.LoggerFactory
 import com.typesafe.config.Config
+
+import scala.concurrent.Await
 
 object ChangeStreamEventListener extends EventListener {
   protected val log = LoggerFactory.getLogger(getClass)
@@ -17,12 +23,10 @@ object ChangeStreamEventListener extends EventListener {
   protected val whitelist: java.util.List[String] = new java.util.LinkedList[String]()
   protected val blacklist: java.util.List[String] = new java.util.LinkedList[String]()
 
-  @volatile protected var positionSaverLoader: (ActorRefFactory => ActorRef) =
-    (_ => system.actorOf(Props(new PositionSaver()), name = "positionSaverActor"))
-  @volatile protected var emitterLoader: (ActorRefFactory => ActorRef) =
-    (_ => system.actorOf(Props(new StdoutActor(positionSaverLoader)), name = "emitterActor"))
+  @volatile protected var positionSaver: Option[ActorRef] = None
+  @volatile protected var emitter: Option[ActorRef] = None
 
-  protected lazy val formatterActor = system.actorOf(Props(new JsonFormatterActor(emitterLoader)), name = "formatterActor")
+  protected lazy val formatterActor = system.actorOf(Props(new JsonFormatterActor(getEmitterLoader)), name = "formatterActor")
   protected lazy val columnInfoActor = system.actorOf(Props(new ColumnInfoActor(_ => formatterActor)), name = "columnInfoActor")
   protected lazy val transactionActor = system.actorOf(Props(new TransactionActor(_ => columnInfoActor)), name = "transactionActor")
 
@@ -46,30 +50,103 @@ object ChangeStreamEventListener extends EventListener {
 
     if(config.hasPath("position-saver.actor")) {
       createActor(config.getString("position-saver.actor"), "positionSaverActor", config).
-        foreach(actorRef => setPositionSaverLoader(_ => actorRef))
+        foreach(actorRef => setPositionSaver(actorRef))
     }
 
     if(config.hasPath("emitter")) {
-      createActor(config.getString("emitter"), "emitterActor", positionSaverLoader, config).
-        foreach(actorRef => setEmitterLoader(_ => actorRef))
+      createActor(config.getString("emitter"), "emitterActor", getPositionSaverLoader, config).
+        foreach(actorRef => setEmitter(actorRef))
     }
+  }
+
+  def getStoredPosition:Option[String] = {
+    import akka.pattern.ask
+    implicit val ec = system.dispatcher
+    implicit val timeout = Timeout(5.seconds)
+    positionSaver.flatMap { saver =>
+      val getFuture = saver.ask(GetPositionRequest)
+      val response = getFuture map {
+        case GetPositionResponse(position) =>
+          position
+        case _ =>
+          log.error("Failed to get position from position saver actor-- this should not happen!")
+          None
+      } recover {
+        case _: java.util.concurrent.TimeoutException =>
+          log.error("Timed out getting position from position saver actor!!")
+          None
+      }
+      Await.result[Option[String]](response, 6.seconds)
+    }
+  }
+
+  def setPosition(position: String) = {
+    import akka.pattern.ask
+    implicit val ec = system.dispatcher
+    implicit val timeout = Timeout(5.seconds)
+    positionSaver.map { saver =>
+      val saveFuture = saver.ask(SavePositionRequest(Some(position)))
+      val response = saveFuture map {
+        case Some(position: String) =>
+          Some(position)
+        case _ =>
+          log.error("Failed to set position in position saver actor-- this should not happen!")
+          None
+      } recover {
+        case _: java.util.concurrent.TimeoutException =>
+          log.error("Timed out getting position from position saver actor!!")
+          None
+      }
+      Await.result[Option[String]](response, 6.seconds)
+    }
+  }
+
+  def persistPosition = {
+    import akka.pattern.ask
+    implicit val ec = system.dispatcher
+    implicit val timeout = Timeout(5.seconds)
+    positionSaver.map { saver =>
+      val saveFuture = saver.ask(SavePositionRequest)
+      val response = saveFuture map {
+        case Some(position: String) =>
+          Some(position)
+        case _ =>
+          log.error("Failed to set position in position saver actor-- this should not happen!")
+          None
+      } recover {
+        case _: java.util.concurrent.TimeoutException =>
+          log.error("Timed out getting position from position saver actor!!")
+          None
+      }
+      Await.result[Option[String]](response, 6.seconds)
+    }
+  }
+
+  protected def getEmitterLoader: (ActorRefFactory => ActorRef) = _ => emitter match {
+    case None => system.actorOf(Props(new StdoutActor(getPositionSaverLoader)), name = "emitterActor")
+    case Some(emitter) => emitter
+  }
+
+  protected def getPositionSaverLoader: (ActorRefFactory => ActorRef) = _ => positionSaver match {
+    case None => system.actorOf(Props(new PositionSaver()), name = "positionSaverActor")
+    case Some(saver) => saver
   }
 
   /** Allows the position saver actor to be configured at runtime.
     *
     * Note: you must initialize the position saver before the emitter, or it will be ignored
     *
-    * @param loader A lamda that returns your actor ref
+    * @param actor your actor ref
     */
-  def setPositionSaverLoader(loader: (ActorRefFactory => ActorRef)) = positionSaverLoader = loader
+  def setPositionSaver(actor: ActorRef) = positionSaver = Some(actor)
 
   /** Allows the emitter/producer actor to be configured at runtime.
     *
     * Note: you must initialize the emitter before the first event arrives, or it will be ignored
     *
-    * @param loader A lamda that returns your actor ref
+    * @param actor your actor ref
     */
-  def setEmitterLoader(loader: (ActorRefFactory => ActorRef)) = emitterLoader = loader
+  def setEmitter(actor: ActorRef) = emitter = Some(actor)
 
   /** Sends binlog events to the appropriate changestream actor.
     *
@@ -81,7 +158,11 @@ object ChangeStreamEventListener extends EventListener {
 
     changeEvent match {
       case Some(e: TransactionEvent)  => transactionActor ! e
-      case Some(e: MutationEvent)     => transactionActor ! MutationWithInfo(e)
+      case Some(e: MutationEvent)     =>
+        val header = binaryLogEvent.getHeader[EventHeaderV4]
+        val position = ChangeStream.currentPosition
+        //"CLIENT:" + ChangeStream.currentPosition + "---CURRENT:" + header.getPosition.toString + "---NEXT:" + header.getNextPosition.toString
+        transactionActor ! MutationWithInfo(e, position)
       case Some(e: AlterTableEvent)   => columnInfoActor ! e
       case None =>
         log.debug(s"Ignoring ${binaryLogEvent.getHeader[EventHeaderV4].getEventType} event.")

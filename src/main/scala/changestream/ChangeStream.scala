@@ -2,6 +2,7 @@ package changestream
 
 import java.io.IOException
 
+import akka.Done
 import akka.actor.{ActorSystem, Props}
 import com.github.shyiko.mysql.binlog.BinaryLogClient
 import com.typesafe.config.ConfigFactory
@@ -44,14 +45,7 @@ object ChangeStream extends App {
     *  - TERM signal
     *  - System reboot/shutdown
     */
-  sys.addShutdownHook({
-    log.info("Shutting down...")
-
-    disconnect()
-    controlActor ! Http.Unbind
-
-    terminateActorSystemAndWait
-  })
+  sys.addShutdownHook(terminateActorSystemAndWait)
 
   /** Start the HTTP server for status and control **/
   protected val controlFuture = IO(Http).ask(Http.Bind(listener = controlActor, interface = host, port = port)).map {
@@ -72,6 +66,17 @@ object ChangeStream extends App {
 
   /** Register the objects that will receive `onEvent` calls and deserialize data **/
   ChangeStreamEventListener.setConfig(config)
+  val overridePosition = System.getProperty("OVERRIDE_POSITION")
+  if(overridePosition != null) { //scalastyle:ignore
+    log.info(s"Overriding starting binlog position with OVERRIDE_POSITION=${overridePosition}")
+    ChangeStreamEventListener.setPosition(overridePosition)
+  }
+  ChangeStreamEventListener.getStoredPosition.map { position =>
+    log.info(s"Setting starting binlog position at ${position}")
+    val Array(fileName, posLong) = position.split(":")
+    client.setBinlogFilename(fileName)
+    client.setBinlogPosition(java.lang.Long.valueOf(posLong))
+  }
   client.registerEventListener(ChangeStreamEventListener)
   client.setEventDeserializer(ChangestreamEventDeserializer)
 
@@ -122,7 +127,19 @@ object ChangeStream extends App {
     }
   }
 
-  protected def terminateActorSystemAndWait = {
+  def terminateActorSystemAndWait = {
+    log.info("Shutting down...")
+
+    disconnect()
+
+    ChangeStreamEventListener.persistPosition
+
+    import akka.pattern.ask
+    implicit val timeout = Timeout(5.seconds)
+    val controlDisconnect = (IO(Http) ? Http.CloseAll).map(_ ⇒ Done)
+    Await.result(controlDisconnect, 60.seconds)
+
+    // TODO this could be cleaner-- like detecting a clean shutdown
     system.terminate()
     Await.result(system.whenTerminated, 60 seconds)
   }

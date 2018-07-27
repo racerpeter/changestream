@@ -40,7 +40,7 @@ class ChangeStreamEventListenerSpec extends Base with Config {
   }
 
   "When receiving an invalid event" should {
-    "Thow an exception" in {
+    "Throw an exception" in {
       header.setEventType(CREATE_FILE)
       val data = new IntVarEventData()
       val event = new Event(header, data)

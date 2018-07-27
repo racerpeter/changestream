@@ -63,6 +63,7 @@ class PositionSaverSpec extends Emitter with Config {
       initialPosition.position should be(None)
 
       saver ! SavePositionRequest(Some("position"))
+      expectMsgType[akka.actor.Status.Success](5000 milliseconds)
 
       saver ! GetPositionRequest
       val savedPosition = expectMsgType[GetPositionResponse](5000 milliseconds)
@@ -77,6 +78,7 @@ class PositionSaverSpec extends Emitter with Config {
       initialPosition.position should be(None)
 
       saver ! SavePositionRequest(Some("position"))
+      expectMsgType[akka.actor.Status.Success](5000 milliseconds)
 
       val saverReloaded = TestActorRef(Props(classOf[PositionSaver], saverConfig))
 
@@ -137,6 +139,7 @@ class PositionSaverSpec extends Emitter with Config {
       initialPosition.position should be(None)
 
       saverMaxRecordsOne ! EmitterResult("position")
+      expectMsgType[akka.actor.Status.Success](5000 milliseconds)
 
       val saverReloaded = TestActorRef(Props(classOf[PositionSaver], configWithOneMaxRecord))
 
@@ -176,6 +179,8 @@ class PositionSaverSpec extends Emitter with Config {
 
       saverMaxRecordsOne ! EmitterResult("position")
       saverMaxRecordsOne ! EmitterResult("position2")
+      expectMsgType[akka.actor.Status.Success](5000 milliseconds)
+      expectMsgType[akka.actor.Status.Success](5000 milliseconds)
 
       val saverReloaded = TestActorRef(Props(classOf[PositionSaver], configWithOneMaxRecord))
 

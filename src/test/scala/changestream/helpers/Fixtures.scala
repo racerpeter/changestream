@@ -177,6 +177,7 @@ object Fixtures {
     val (m, d, od) = mutation(mutationType, rowCount, transactionCurrentRow, sequenceNext, database, tableName, tableId)
     (MutationWithInfo(
       m,
+      "",
       transaction = transactionInfo match {
         case true => Some(transactionInfoEither(transactionCurrentRow, isLastChangeInTransaction))
         case false => None
