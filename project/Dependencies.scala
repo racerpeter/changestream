@@ -2,7 +2,7 @@ import sbt._
 
 object Dependencies {
   // Versions
-  lazy val akkaVersion = "2.5.3"
+  lazy val akkaVersion = "2.5.14"
   lazy val awsVersion = "1.11.172"
   lazy val sprayVersion = "1.3.4"
 
@@ -33,7 +33,7 @@ object Dependencies {
   val testDependencies = Seq(
     "com.typesafe.akka" %% "akka-testkit" % akkaVersion % "it,test,bench",
     "io.spray" %% "spray-testkit" % sprayVersion % "it,test,bench",
-    "org.scalatest" %% "scalatest" % "3.0.1" % "it,test,bench",
+    "org.scalatest" %% "scalatest" % "3.0.5" % "it,test,bench",
     "com.storm-enroute" %% "scalameter" % "0.8.2" % "it,test,bench"
   )
 }
