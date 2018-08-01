@@ -66,17 +66,20 @@ object ChangeStream extends App {
 
   /** Register the objects that will receive `onEvent` calls and deserialize data **/
   ChangeStreamEventListener.setConfig(config)
+
   val overridePosition = System.getProperty("OVERRIDE_POSITION")
   if(overridePosition != null) { //scalastyle:ignore
     log.info(s"Overriding starting binlog position with OVERRIDE_POSITION=${overridePosition}")
     ChangeStreamEventListener.setPosition(overridePosition)
   }
+
   ChangeStreamEventListener.getStoredPosition.map { position =>
     log.info(s"Setting starting binlog position at ${position}")
     val Array(fileName, posLong) = position.split(":")
     client.setBinlogFilename(fileName)
     client.setBinlogPosition(java.lang.Long.valueOf(posLong))
   }
+
   client.registerEventListener(ChangeStreamEventListener)
   client.setEventDeserializer(ChangestreamEventDeserializer)
 
