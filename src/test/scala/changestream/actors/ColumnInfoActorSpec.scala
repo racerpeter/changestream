@@ -30,7 +30,7 @@ class ColumnInfoActorSpec extends Database {
     "No mutation event for an invalid database or table" in {
       val columnInfoActor = TestActorRef(Props(classOf[ColumnInfoActor], maker, config))
       columnInfoActor ! fakeMutationWithNoInfo
-      probe.expectNoMsg(connectionTimeout milliseconds)
+      probe.expectNoMessage(connectionTimeout milliseconds)
     }
 
     "Reply with correct column info for a valid table with preload" in {

@@ -43,7 +43,7 @@ class TransactionActorSpec extends Base {
         transactionActor ! BeginTransaction
 
         transactionActor ! mutationFirstInput
-        probe.expectNoMsg
+        probe.expectNoMessage
       }
 
       "when receiving a subsequent event should emit previous event" in {

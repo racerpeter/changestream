@@ -71,7 +71,7 @@ class App extends Database with Config {
     json("primary_key").asJsObject.fields.keys should contain(primaryKeyField)
   }
 
-  def validateNoEvents = probe.expectNoMsg(5 seconds)
+  def validateNoEvents = probe.expectNoMessage(5 seconds)
 
   def waitAndClear(count: Int = 1) = {
     (1 to count).foreach(idx =>

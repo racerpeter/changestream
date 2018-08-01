@@ -389,7 +389,7 @@ is multiline""")))
       formatterActor ! validMutation
       probe.receiveN(1)
       formatterActor ! validMutation.copy(columns = None)
-      probe.expectNoMsg()
+      probe.expectNoMessage()
     }
   }
 
