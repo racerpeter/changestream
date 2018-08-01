@@ -40,17 +40,19 @@ class PositionSaverSpec extends Emitter with Config {
       val saver = TestActorRef(Props(classOf[PositionSaver], badConfig))
 
       saver ! GetPositionRequest
-      expectNoMsg(2000 milliseconds)
+      expectNoMessage(2000 milliseconds)
     }
 
     "Throw an exception when the save file location can't be written" in {
+      val unWriteable = new File("src/test/resources/unwriteable.pos").getAbsolutePath
+
       val badConfig = ConfigFactory.
-        parseString(s"position-saver.file-path = /etc/hosts").
+        parseString(s"position-saver.file-path = ${unWriteable}").
         withFallback(awsConfig)
       val saver = TestActorRef(Props(classOf[PositionSaver], badConfig))
 
       saver ! GetPositionRequest
-      expectNoMsg(2000 milliseconds)
+      expectNoMessage(2000 milliseconds)
     }
   }
 
