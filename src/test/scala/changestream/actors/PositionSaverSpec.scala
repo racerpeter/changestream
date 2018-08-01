@@ -43,7 +43,7 @@ class PositionSaverSpec extends Emitter with Config {
       expectNoMessage(2000 milliseconds)
     }
 
-    "Throw an exception when the save file location can't be written" in {
+    "Throw an exception when the save file location can't be written (requires chmod -w src/test/resources/unwriteable.pos)" in {
       val unWriteable = new File("src/test/resources/unwriteable.pos").getAbsolutePath
 
       val badConfig = ConfigFactory.

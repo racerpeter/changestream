@@ -40,6 +40,7 @@ jobs:
           command: |
             sbt compile test:compile it:compile exit
             rm -rf /root/current/.git
+            chmod -w /root/current/src/test/resources/unwriteable.pos
       - save_cache:
           key: changestream-cache-v1-{{ .Branch }}-{{ epoch }}
           paths:
