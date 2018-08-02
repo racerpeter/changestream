@@ -16,8 +16,10 @@ object PositionSaver {
   // TODO: position should be a struct
   // TODO: gtid support
   case class SavePositionRequest(positionOverride: Option[String])
+  case object SaveCurrentPositionRequest
   case object GetPositionRequest
   case object GetLastSavedPositionRequest
+  case object RestoreLastSavedPositionRequest
   case class GetPositionResponse(position: Option[String])
   case class EmitterResult(position: String, meta: Option[Any] = None)
 }
@@ -37,9 +39,10 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
   protected var cancellableSchedule: Option[Cancellable] = None
   protected def setDelayedSave(origSender: ActorRef) = {
     val scheduler = context.system.scheduler
+    cancelDelayedSave
     cancellableSchedule = MAX_WAIT.length match {
       case 0 => None
-      case _ => Some(scheduler.scheduleOnce(MAX_WAIT) { self ! SavePositionRequest })
+      case _ => Some(scheduler.scheduleOnce(MAX_WAIT) { self ! SaveCurrentPositionRequest })
     }
   }
   protected def cancelDelayedSave = cancellableSchedule.foreach(_.cancel())
@@ -72,6 +75,9 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
 
   def writePosition(position: Option[String], sender: Option[ActorRef] = None) = {
     try {
+      cancelDelayedSave
+      currentRecordCount = 0
+
       val saverOutputStream = new FileOutputStream(saverFile)
       val saverWriter = new OutputStreamWriter(saverOutputStream, StandardCharsets.UTF_8)
       saverWriter.write(position match {
@@ -79,6 +85,7 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
         case Some(str) => str
       })
       saverWriter.close()
+
       sender.map(_ ! akka.actor.Status.Success(position))
     } catch {
       case exception: IOException =>
@@ -88,8 +95,10 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
     }
   }
 
+  def restoreLastSavedPosition = currentPosition = readPosition
+
   override def preStart() = {
-    currentPosition = readPosition
+    restoreLastSavedPosition
     writePosition(currentPosition) //make sure we can write to the file (write back position)
     log.info(s"Ready to save positions to file ${SAVER_FILE_PATH}.")
   }
@@ -100,23 +109,21 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
     case EmitterResult(position, meta) =>
       log.debug(s"Received position: ${position}")
 
-      cancelDelayedSave
       currentRecordCount += 1
       currentPosition = Some(position)
 
       currentRecordCount match {
         case MAX_RECORDS =>
-          currentRecordCount = 0
           writePosition(currentPosition, Some(sender()))
         case _ =>
           setDelayedSave(sender())
       }
 
-    case SavePositionRequest(Some(overridePosition: String)) =>
-      currentPosition = Some(overridePosition)
+    case SavePositionRequest(overridePosition: Option[String]) =>
+      currentPosition = overridePosition
       writePosition(currentPosition, Some(sender()))
 
-    case SavePositionRequest =>
+    case SaveCurrentPositionRequest =>
       writePosition(currentPosition, Some(sender()))
 
     case GetPositionRequest =>
@@ -124,5 +131,9 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
 
     case GetLastSavedPositionRequest =>
       sender() ! GetPositionResponse(readPosition)
+
+    case RestoreLastSavedPositionRequest =>
+      restoreLastSavedPosition
+      sender() ! GetPositionResponse(currentPosition)
   }
 }

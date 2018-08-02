@@ -56,6 +56,42 @@ class PositionSaverSpec extends Emitter with Config {
     }
   }
 
+  "When requesting the last saved position" should {
+    "Return the last saved position" in {
+      val configWithTwoMaxRecord = ConfigFactory.
+        parseString(s"position-saver.max-records = 2\nposition-saver.max-wait = 1000000").
+        withFallback(saverConfig)
+      val saver = TestActorRef(Props(classOf[PositionSaver], configWithTwoMaxRecord))
+
+      saver ! SavePositionRequest(Some("last-saved-position"))
+      expectMsgType[akka.actor.Status.Success](5000 milliseconds)
+
+      saver ! EmitterResult("new-position")
+
+      saver ! GetLastSavedPositionRequest
+      val lastSavedPosition = expectMsgType[GetPositionResponse](5000 milliseconds)
+      lastSavedPosition.position should be(Some("last-saved-position"))
+    }
+  }
+
+  "When restoring last saved position" should {
+    "Restore last saved position and return it" in {
+      val configWithTwoMaxRecord = ConfigFactory.
+        parseString(s"position-saver.max-records = 2\nposition-saver.max-wait = 1000000").
+        withFallback(saverConfig)
+      val saver = TestActorRef(Props(classOf[PositionSaver], configWithTwoMaxRecord))
+
+      saver ! SavePositionRequest(Some("last-saved-position"))
+      expectMsgType[akka.actor.Status.Success](5000 milliseconds)
+
+      saver ! EmitterResult("new-position")
+
+      saver ! RestoreLastSavedPositionRequest
+      val lastSavedPosition = expectMsgType[GetPositionResponse](5000 milliseconds)
+      lastSavedPosition.position should be(Some("last-saved-position"))
+    }
+  }
+
   "When setting the current position via override" should {
     "Immediately store the override position in memory" in {
       val saver = TestActorRef(Props(classOf[PositionSaver], saverConfig))
@@ -89,30 +125,45 @@ class PositionSaverSpec extends Emitter with Config {
       savedPosition.position should be(Some("position"))
     }
 
-//    "Throw an exception when the save file location is invalid" in {
-//      val tempDir = new File("/tmp/saver")
-//      tempDir.exists() should be(false)
-//
-//      tempDir.mkdir()
-//      val tempFile = File.createTempFile("saverBadFileTest", "", tempDir)
-//
-//      // initially the config is valid
-//      val badConfig = ConfigFactory.
-//        parseString(s"position-saver.file-path = ${tempFile.getPath}").
-//        withFallback(awsConfig)
-//      val saver = TestActorRef(Props(classOf[PositionSaver], badConfig))
-//
-//      saver ! GetPositionRequest
-//      val initialPosition = expectMsgType[GetPositionResponse](5000 milliseconds)
-//      initialPosition.position should be(None)
-//
-//      // then we delete the temp file's parent directory
-//      tempDir.delete() // TODO can't seem to delete this directory
-//      tempDir.exists() should be(false)
-//
-//      saver ! SavePositionRequest(Some("position"))
-//      expectMsgType[akka.actor.Status.Failure](2000 milliseconds)
-//    }
+    "Immediately persist the override position to the temp file when the override position is none" in {
+      val saver = TestActorRef(Props(classOf[PositionSaver], saverConfig))
+
+      saver ! SavePositionRequest(Some("position"))
+      expectMsgType[akka.actor.Status.Success](5000 milliseconds)
+
+      saver ! GetPositionRequest
+      expectMsgType[GetPositionResponse](5000 milliseconds).position should be(Some("position"))
+
+      saver ! SavePositionRequest(None)
+      expectMsgType[akka.actor.Status.Success](5000 milliseconds)
+
+      saver ! GetPositionRequest
+      expectMsgType[GetPositionResponse](5000 milliseconds).position should be(None)
+    }
+  }
+
+  "Save the current position when requested" in {
+    val configWithTwoMaxRecord = ConfigFactory.
+      parseString(s"position-saver.max-records = 2\nposition-saver.max-wait = 1000000").
+      withFallback(saverConfig)
+    val saver = TestActorRef(Props(classOf[PositionSaver], configWithTwoMaxRecord))
+
+    saver ! SavePositionRequest(Some("initial-position"))
+    expectMsgType[akka.actor.Status.Success](5000 milliseconds)
+
+    saver ! EmitterResult("new-position")
+
+    saver ! GetPositionRequest
+    expectMsgType[GetPositionResponse](5000 milliseconds).position should be(Some("new-position"))
+
+    saver ! GetLastSavedPositionRequest
+    expectMsgType[GetPositionResponse](5000 milliseconds).position should be(Some("initial-position"))
+
+    saver ! SaveCurrentPositionRequest
+    expectMsgType[akka.actor.Status.Success](5000 milliseconds)
+
+    saver ! GetLastSavedPositionRequest
+    expectMsgType[GetPositionResponse](5000 milliseconds).position should be(Some("new-position"))
   }
 
   "When receiving a mutation" should {
