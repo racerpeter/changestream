@@ -2,7 +2,7 @@ package changestream
 
 import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, Props}
 import akka.util.Timeout
-import changestream.actors.PositionSaver.{GetPositionRequest, GetPositionResponse, SavePositionRequest}
+import changestream.actors.PositionSaver.{GetPositionRequest, GetPositionResponse, SaveCurrentPositionRequest, SavePositionRequest}
 import changestream.actors._
 import changestream.events._
 
@@ -106,7 +106,7 @@ object ChangeStreamEventListener extends EventListener {
     implicit val ec = system.dispatcher
     implicit val timeout = Timeout(5.seconds)
     positionSaver.map { saver =>
-      val saveFuture = saver.ask(SavePositionRequest)
+      val saveFuture = saver.ask(SaveCurrentPositionRequest)
       val response = saveFuture map {
         case Some(position: String) =>
           Some(position)
@@ -159,14 +159,23 @@ object ChangeStreamEventListener extends EventListener {
     changeEvent match {
       case Some(e: TransactionEvent)  => transactionActor ! e
       case Some(e: MutationEvent)     =>
-        val header = binaryLogEvent.getHeader[EventHeaderV4]
-        val position = ChangeStream.currentPosition
-        //"CLIENT:" + ChangeStream.currentPosition + "---CURRENT:" + header.getPosition.toString + "---NEXT:" + header.getNextPosition.toString
-        transactionActor ! MutationWithInfo(e, position)
+        transactionActor ! MutationWithInfo(
+          e,
+          getNextPosition(
+            binaryLogEvent.getHeader[EventHeaderV4].getNextPosition
+          )
+        )
       case Some(e: AlterTableEvent)   => columnInfoActor ! e
       case None =>
         log.debug(s"Ignoring ${binaryLogEvent.getHeader[EventHeaderV4].getEventType} event.")
     }
+  }
+
+  def getNextPosition(eventNextPosition: Long): String = {
+    ChangeStream.currentBinlogFilename + ":" + (eventNextPosition match {
+      case 0L => ChangeStream.currentBinlogPosition.toString // if nextposition is 0, save the current position
+      case _ => eventNextPosition.toString // otherwise, save the next position (i.e. advance to the next change)
+    })
   }
 
   /** Returns the appropriate ChangeEvent case object given a binlog event object.

@@ -67,19 +67,6 @@ object ChangeStream extends App {
   /** Register the objects that will receive `onEvent` calls and deserialize data **/
   ChangeStreamEventListener.setConfig(config)
 
-  val overridePosition = System.getProperty("OVERRIDE_POSITION")
-  if(overridePosition != null) { //scalastyle:ignore
-    log.info(s"Overriding starting binlog position with OVERRIDE_POSITION=${overridePosition}")
-    ChangeStreamEventListener.setPosition(overridePosition)
-  }
-
-  ChangeStreamEventListener.getStoredPosition.map { position =>
-    log.info(s"Setting starting binlog position at ${position}")
-    val Array(fileName, posLong) = position.split(":")
-    client.setBinlogFilename(fileName)
-    client.setBinlogPosition(java.lang.Long.valueOf(posLong))
-  }
-
   client.registerEventListener(ChangeStreamEventListener)
   client.setEventDeserializer(ChangestreamEventDeserializer)
 
@@ -91,9 +78,12 @@ object ChangeStream extends App {
   def serverName = s"${mysqlHost}:${mysqlPort}"
   def clientId = client.getServerId
 
+  // todo remove
   def currentPosition = {
     s"${client.getBinlogFilename}:${client.getBinlogPosition}"
   }
+  def currentBinlogFilename = client.getBinlogFilename
+  def currentBinlogPosition = client.getBinlogPosition
 
   def isConnected = client.isConnected
 
@@ -112,6 +102,8 @@ object ChangeStream extends App {
     if(client.isConnected()) {
       isPaused = true
       client.disconnect()
+      //TODO drain events?
+      ChangeStreamEventListener.persistPosition
       true
     }
     else {
@@ -135,7 +127,8 @@ object ChangeStream extends App {
 
     disconnect()
 
-    ChangeStreamEventListener.persistPosition
+    client.unregisterEventListener(ChangeStreamEventListener)
+    client.unregisterLifecycleListener(ChangeStreamLifecycleListener)
 
     import akka.pattern.ask
     implicit val timeout = Timeout(5.seconds)
@@ -147,11 +140,29 @@ object ChangeStream extends App {
     Await.result(system.whenTerminated, 60 seconds)
   }
 
-  protected def getConnected = {
+  def getConnected = {
     /** Finally, signal the BinaryLogClient to start processing events **/
     log.info(s"Starting changestream...")
     while(!isPaused && !client.isConnected) {
       try {
+
+        val overridePosition = System.getProperty("OVERRIDE_POSITION")
+        if(overridePosition != null && overridePosition.length > 0) { //scalastyle:ignore
+          log.info(s"Overriding starting binlog position with OVERRIDE_POSITION=${overridePosition}")
+          ChangeStreamEventListener.setPosition(overridePosition)
+        }
+
+        ChangeStreamEventListener.getStoredPosition match {
+          case Some(position) =>
+            log.info(s"Setting starting binlog position at ${position}")
+            val Array(fileName, posLong) = position.split(":")
+            client.setBinlogFilename(fileName)
+            client.setBinlogPosition(java.lang.Long.valueOf(posLong))
+          case None =>
+            client.setBinlogFilename(null) //scalastyle:ignore
+            client.setBinlogPosition(4L)
+        }
+
         client.connect()
       }
       catch {
