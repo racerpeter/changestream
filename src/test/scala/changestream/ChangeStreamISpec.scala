@@ -22,7 +22,7 @@ import scala.io.Source
 import scala.util.Random
 
 // TODO cleanup and refactor -- improve binlog comparison test
-class ChangeStreamSaverISpec extends Database with Config {
+class ChangeStreamISpec extends Database with Config {
   // Bootstrap the config
   val tempFile = File.createTempFile("positionSaverISpec", ".pos")
   System.setProperty("config.resource", "test.conf")
