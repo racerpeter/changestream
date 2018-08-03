@@ -104,6 +104,7 @@ class ChangeStreamSaverISpec extends Database with Config {
   }
 
   def ensureConnected = {
+    Thread.sleep(500)
     var c = 0
     while(!ChangeStream.isConnected && c < 50) {
       Thread.sleep(100)
@@ -112,6 +113,7 @@ class ChangeStreamSaverISpec extends Database with Config {
   }
 
   def ensureDisconnected = {
+    Thread.sleep(500)
     var c = 0
     while(ChangeStream.isConnected && c < 50) {
       Thread.sleep(100)

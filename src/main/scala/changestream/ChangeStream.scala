@@ -24,7 +24,7 @@ object ChangeStream extends App {
   protected val config = ConfigFactory.load().getConfig("changestream")
   protected val mysqlHost = config.getString("mysql.host")
   protected val mysqlPort = config.getInt("mysql.port")
-  protected lazy val client = new BinaryLogClient(
+  protected val client = new BinaryLogClient(
     mysqlHost,
     mysqlPort,
     config.getString("mysql.user"),
