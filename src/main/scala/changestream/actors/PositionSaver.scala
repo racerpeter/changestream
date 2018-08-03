@@ -101,7 +101,7 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
 
   override def preStart() = {
     restoreLastSavedPosition
-    writePosition(currentPosition) //make sure we can write to the file (write back position)
+    writePosition(currentPosition)
     log.info(s"Ready to save positions to file ${SAVER_FILE_PATH}.")
   }
 

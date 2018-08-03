@@ -44,6 +44,14 @@ class ChangeStreamSaverISpec extends Database with Config {
 
   def flushProbe = while(emitterProbe.msgAvailable) { emitterProbe.receiveOne(1000 milliseconds)}
 
+  val app = getApp
+
+  override def beforeAll(): Unit = {
+    app.start
+    ensureConnected
+    super.beforeAll()
+  }
+
   override def afterAll(): Unit = {
     tempFile.delete()
     super.afterAll()
@@ -110,10 +118,6 @@ class ChangeStreamSaverISpec extends Database with Config {
       c += 1
     }
   }
-
-  val app = getApp
-  app.start
-  ensureConnected
 
   def assertValidEvent( //scalastyle:ignore
                         mutation: String,
