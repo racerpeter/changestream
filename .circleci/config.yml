@@ -1,5 +1,5 @@
 defaults: &defaults
-  parallel: 1
+  parallelism: 1
   resource_class: large
   working_directory: /root/current
   docker:
@@ -68,7 +68,7 @@ jobs:
       - run:
           name: Unit Tests (w/ Code Coverage)
           command: |
-            sbt clean coverage test it:test coverageReport && \
+            sbt clean coverage test coverageReport && \
             bash <(curl -s https://codecov.io/bash)
       - store_test_results:
           path: /root/current/target/test-reports
