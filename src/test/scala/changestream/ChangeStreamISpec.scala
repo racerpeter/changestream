@@ -21,7 +21,6 @@ import scala.concurrent.Await
 import scala.io.Source
 import scala.util.Random
 
-// TODO cleanup and refactor -- improve binlog comparison test
 class ChangeStreamISpec extends Database with Config {
   // Bootstrap the config
   val tempFile = File.createTempFile("positionSaverISpec", ".pos")
@@ -33,20 +32,21 @@ class ChangeStreamISpec extends Database with Config {
   ConfigFactory.invalidateCaches()
 
   // Wire in the probes
-  lazy val positionSaver = system.actorOf(Props(new PositionSaver()), name = "positionSaverActor")
-  lazy val emitterProbe = TestProbe()
-  lazy val emitter = system.actorOf(Props(new StdoutActor(_ => positionSaver)), name = "emitterActor")
+  val positionSaver = system.actorOf(Props(new PositionSaver()), name = "positionSaverActor")
+  val emitterProbe = TestProbe()
+  val emitter = system.actorOf(Props(new StdoutActor(_ => positionSaver)), name = "emitterActor")
 
-  def init = {
-    ChangeStreamEventListener.setPositionSaver(positionSaver)
-    ChangeStreamEventListener.setEmitter(emitterProbe.ref)
+  val app = new Thread {
+    override def run = ChangeStream.main(Array())
+    override def interrupt = {
+      ChangeStream.terminateActorSystemAndWait
+      super.interrupt
+    }
   }
 
-  def flushProbe = while(emitterProbe.msgAvailable) { emitterProbe.receiveOne(1000 milliseconds)}
-
-  val app = getApp
-
   override def beforeAll(): Unit = {
+    ChangeStreamEventListener.setPositionSaver(positionSaver)
+    ChangeStreamEventListener.setEmitter(emitterProbe.ref)
     app.start
     ensureConnected
     super.beforeAll()
@@ -55,6 +55,24 @@ class ChangeStreamISpec extends Database with Config {
   override def afterAll(): Unit = {
     tempFile.delete()
     super.afterAll()
+  }
+
+  def ensureConnected = {
+    Thread.sleep(500)
+    var c = 0
+    while(!ChangeStream.isConnected && c < 50) {
+      Thread.sleep(100)
+      c += 1
+    }
+  }
+
+  def ensureDisconnected = {
+    Thread.sleep(500)
+    var c = 0
+    while(ChangeStream.isConnected && c < 50) {
+      Thread.sleep(100)
+      c += 1
+    }
   }
 
   def expectMutation:MutationWithInfo = {
@@ -82,43 +100,6 @@ class ChangeStreamISpec extends Database with Config {
     val position = bufferedSource.getLines.mkString
     bufferedSource.close
     position
-  }
-
-  def writeBinLogPosition(position: String) = {
-    val saverOutputStream = new FileOutputStream(tempFile)
-    val saverWriter = new OutputStreamWriter(saverOutputStream, StandardCharsets.UTF_8)
-    saverWriter.write(position)
-    saverWriter.close()
-  }
-
-  def getApp = {
-    init
-    flushProbe
-    new Thread {
-      override def run = ChangeStream.main(Array())
-      override def interrupt = {
-        ChangeStream.terminateActorSystemAndWait
-        super.interrupt
-      }
-    }
-  }
-
-  def ensureConnected = {
-    Thread.sleep(500)
-    var c = 0
-    while(!ChangeStream.isConnected && c < 50) {
-      Thread.sleep(100)
-      c += 1
-    }
-  }
-
-  def ensureDisconnected = {
-    Thread.sleep(500)
-    var c = 0
-    while(ChangeStream.isConnected && c < 50) {
-      Thread.sleep(100)
-      c += 1
-    }
   }
 
   def assertValidEvent( //scalastyle:ignore
