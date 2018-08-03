@@ -78,10 +78,6 @@ object ChangeStream extends App {
   def serverName = s"${mysqlHost}:${mysqlPort}"
   def clientId = client.getServerId
 
-  // todo remove
-  def currentPosition = {
-    s"${client.getBinlogFilename}:${client.getBinlogPosition}"
-  }
   def currentBinlogFilename = client.getBinlogFilename
   def currentBinlogPosition = client.getBinlogPosition
 

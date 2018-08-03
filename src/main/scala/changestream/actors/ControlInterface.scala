@@ -5,7 +5,7 @@ import spray.httpx.SprayJsonSupport._
 import spray.routing._
 import akka.actor._
 import ch.qos.logback.classic.Level
-import changestream.{ChangeStream, ChangestreamEventDeserializer}
+import changestream.{ChangeStream, ChangeStreamEventListener, ChangestreamEventDeserializer}
 import org.slf4j.LoggerFactory
 import ch.qos.logback.classic.Logger
 import spray.routing.HttpService
@@ -144,7 +144,7 @@ trait ControlInterface extends HttpService with DefaultJsonProtocol {
       ChangeStream.serverName,
       ChangeStream.clientId,
       ChangeStream.isConnected,
-      ChangeStream.currentPosition,
+      ChangeStreamEventListener.getStoredPosition.getOrElse(""),
       ChangestreamEventDeserializer.getCurrentSequenceNumber,
       MemoryInfo(
         Runtime.getRuntime().totalMemory(),
