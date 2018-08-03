@@ -42,18 +42,6 @@ class PositionSaverSpec extends Emitter with Config {
       saver ! GetPositionRequest
       expectNoMessage(2000 milliseconds)
     }
-
-    "Throw an exception when the save file location can't be written (requires chmod -w src/test/resources/unwriteable.pos)" in {
-      val unWriteable = new File("src/test/resources/unwriteable.pos").getAbsolutePath
-
-      val badConfig = ConfigFactory.
-        parseString(s"position-saver.file-path = ${unWriteable}").
-        withFallback(awsConfig)
-      val saver = TestActorRef(Props(classOf[PositionSaver], badConfig))
-
-      saver ! GetPositionRequest
-      expectNoMessage(2000 milliseconds)
-    }
   }
 
   "When requesting the last saved position" should {
