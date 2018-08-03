@@ -42,7 +42,9 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
     cancelDelayedSave
     cancellableSchedule = MAX_WAIT.length match {
       case 0 => None
-      case _ => Some(scheduler.scheduleOnce(MAX_WAIT) { self ! SaveCurrentPositionRequest })
+      case _ => Some(scheduler.scheduleOnce(MAX_WAIT) {
+        self.tell(SaveCurrentPositionRequest, origSender)
+      })
     }
   }
   protected def cancelDelayedSave = cancellableSchedule.foreach(_.cancel())
