@@ -8,11 +8,13 @@ import akka.testkit.TestProbe
 import changestream.actors.PositionSaver._
 import changestream.actors.{PositionSaver, StdoutActor}
 import changestream.events.{Delete, Insert, MutationWithInfo, Update}
-import changestream.helpers.{Config, Database}
+import changestream.helpers.{Config, Database, Fixtures}
 import com.github.mauricio.async.db.RowData
 import com.typesafe.config.ConfigFactory
+
 import scala.language.postfixOps
 import akka.pattern.ask
+import spray.json._
 
 import scala.concurrent.duration._
 import scala.concurrent.Await
@@ -96,6 +98,138 @@ class ChangeStreamSaverISpec extends Database with Config {
   val app = getApp
   app.start
   Thread.sleep(5000)
+
+  def assertValidEvent( //scalastyle:ignore
+                        mutation: String,
+                        database: String = "changestream_test",
+                        table: String = "users",
+                        queryRowCount: Int = 1,
+                        transactionCurrentRow: Int = 1,
+                        primaryKeyField: String = "id",
+                        currentRow: Int = 1,
+                        sql: Option[String] = None,
+                        isLastMutation: Boolean = false
+                      ): Unit = {
+    val message = expectMutation
+    message.formattedMessage.isDefined should be(true)
+    val json = message.formattedMessage.get.parseJson.asJsObject.fields
+
+    json("mutation") should equal(JsString(mutation))
+    json should contain key ("sequence")
+    json("database") should equal(JsString(database))
+    json("table") should equal(JsString(table))
+    json("transaction").asJsObject.fields("current_row") should equal(JsNumber(transactionCurrentRow))
+    if(isLastMutation) {
+      json("transaction").asJsObject.fields("last_mutation") should equal(JsTrue)
+    } else {
+      json("transaction").asJsObject.fields.keys shouldNot contain("last_mutation")
+    }
+    json("query").asJsObject.fields("timestamp").asInstanceOf[JsNumber].value.toLong.compareTo(Fixtures.timestamp - 60000) should be(1)
+    json("query").asJsObject.fields("row_count") should equal(JsNumber(queryRowCount))
+    json("query").asJsObject.fields("current_row") should equal(JsNumber(currentRow))
+    if(sql != None) {
+      json("query").asJsObject.fields("sql") should equal(JsString(sql.get.trim))
+    }
+    json("primary_key").asJsObject.fields.keys should contain(primaryKeyField)
+  }
+
+  def validateNoEvents = emitterProbe.expectNoMessage(5 seconds)
+
+  def waitAndClear(count: Int = 1) = {
+    (1 to count).foreach(idx =>
+      expectMutation
+    )
+  }
+
+  "when handling an INSERT statement" should {
+    "affecting a single row, generates a single insert event" in {
+      queryAndWait(INSERT)
+
+      assertValidEvent("insert", sql = Some(INSERT), isLastMutation = true)
+    }
+  }
+
+  "when handling an INSERT statement" should {
+    "affecting multiple rows, generates multiple insert events" in {
+      queryAndWait(INSERT_MULTI)
+
+      assertValidEvent("insert", queryRowCount = 2, currentRow = 1, transactionCurrentRow = 1, sql = Some(INSERT_MULTI))
+      assertValidEvent("insert", queryRowCount = 2, currentRow = 2, transactionCurrentRow = 2, sql = Some(INSERT_MULTI), isLastMutation = true)
+    }
+  }
+
+  "when handling an UPDATE statement" should {
+    "affecting a single row, generates a single update event" in {
+      queryAndWait(INSERT)
+      waitAndClear()
+
+      queryAndWait(UPDATE)
+      assertValidEvent("update", sql = Some(UPDATE), isLastMutation = true)
+    }
+  }
+
+  "when handling an UPDATE statement" should {
+    "affecting multiple rows" in {
+      queryAndWait(INSERT_MULTI)
+      waitAndClear(2)
+
+      queryAndWait(UPDATE_ALL)
+      assertValidEvent("update", queryRowCount = 2, currentRow = 1, transactionCurrentRow = 1, sql = Some(UPDATE_ALL))
+      assertValidEvent("update", queryRowCount = 2, currentRow = 2, transactionCurrentRow = 2, sql = Some(UPDATE_ALL), isLastMutation = true)
+    }
+  }
+
+  "when handling an DELETE statement" should {
+    "affecting a single row, generates a single delete event" in {
+      queryAndWait(INSERT)
+      waitAndClear()
+
+      queryAndWait(DELETE)
+      assertValidEvent("delete", sql = Some(DELETE), isLastMutation = true)
+    }
+    "affecting multiple rows" in {
+      queryAndWait(INSERT)
+      queryAndWait(INSERT)
+      waitAndClear(2)
+
+      queryAndWait(DELETE_ALL)
+      assertValidEvent("delete", queryRowCount = 2, currentRow = 1, transactionCurrentRow = 1, sql = Some(DELETE_ALL))
+      assertValidEvent("delete", queryRowCount = 2, currentRow = 2, transactionCurrentRow = 2, sql = Some(DELETE_ALL), isLastMutation = true)
+    }
+  }
+
+  "when doing things in a transaction" should {
+    "a successfully committed transaction" should {
+      "buffers one change event to be able to properly tag the last event ina  transaction" in {
+        queryAndWait("begin")
+        queryAndWait(INSERT)
+        queryAndWait(INSERT)
+        queryAndWait(UPDATE_ALL)
+        queryAndWait(DELETE_ALL)
+        validateNoEvents
+
+        queryAndWait("commit")
+        assertValidEvent("insert", queryRowCount = 1, transactionCurrentRow = 1, currentRow = 1, sql = Some(INSERT))
+        assertValidEvent("insert", queryRowCount = 1, transactionCurrentRow = 2, currentRow = 1, sql = Some(INSERT))
+        assertValidEvent("update", queryRowCount = 2, transactionCurrentRow = 3, currentRow = 1, sql = Some(UPDATE_ALL))
+        assertValidEvent("update", queryRowCount = 2, transactionCurrentRow = 4, currentRow = 2, sql = Some(UPDATE_ALL))
+        assertValidEvent("delete", queryRowCount = 2, transactionCurrentRow = 5, currentRow = 1, sql = Some(DELETE_ALL))
+        assertValidEvent("delete", queryRowCount = 2, transactionCurrentRow = 6, currentRow = 2, sql = Some(DELETE_ALL), isLastMutation = true)
+      }
+    }
+
+    "a rolled back transaction" should {
+      "generates no change events" in {
+        queryAndWait("begin")
+        queryAndWait(INSERT)
+        queryAndWait(INSERT)
+        queryAndWait(UPDATE_ALL)
+        queryAndWait(DELETE_ALL)
+        queryAndWait("rollback")
+        validateNoEvents
+      }
+    }
+  }
 
   "when starting up" should {
     "start from 'real time' when there is no last known position" in {
