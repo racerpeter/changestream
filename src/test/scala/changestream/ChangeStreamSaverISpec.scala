@@ -95,9 +95,25 @@ class ChangeStreamSaverISpec extends Database with Config {
     }
   }
 
+  def ensureConnected = {
+    var c = 0
+    while(!ChangeStream.isConnected && c < 50) {
+      Thread.sleep(100)
+      c += 1
+    }
+  }
+
+  def ensureDisconnected = {
+    var c = 0
+    while(ChangeStream.isConnected && c < 50) {
+      Thread.sleep(100)
+      c += 1
+    }
+  }
+
   val app = getApp
   app.start
-  Thread.sleep(5000)
+  ensureConnected
 
   def assertValidEvent( //scalastyle:ignore
                         mutation: String,
@@ -239,7 +255,7 @@ class ChangeStreamSaverISpec extends Database with Config {
       queryAndWait(INSERT)
 
       ChangeStream.connect()
-      Thread.sleep(5000)
+      ensureConnected
 
       queryAndWait(UPDATE)
 
@@ -253,7 +269,7 @@ class ChangeStreamSaverISpec extends Database with Config {
       queryAndWait(INSERT)
 
       ChangeStream.connect()
-      Thread.sleep(5000)
+      ensureConnected
 
       queryAndWait(UPDATE)
 
@@ -276,7 +292,7 @@ class ChangeStreamSaverISpec extends Database with Config {
       queryAndWait(UPDATE)
 
       ChangeStream.connect()
-      Thread.sleep(5000)
+      ensureConnected
 
       // advance the live position to be "newer" than the override (should arrive second)
       queryAndWait(DELETE)
@@ -295,7 +311,7 @@ class ChangeStreamSaverISpec extends Database with Config {
       val startingPosition = getStoredBinLogPosition
 
       ChangeStream.connect()
-      Thread.sleep(5000)
+      ensureConnected
 
       queryAndWait(INSERT) // should not persist immediately because of the max events = 2
       val insertMutation = expectMutation
@@ -305,19 +321,17 @@ class ChangeStreamSaverISpec extends Database with Config {
       getStoredBinLogPosition should be(startingPosition)
 
       ChangeStream.disconnect()
-      Thread.sleep(1000)
+      ensureDisconnected
 
       getStoredBinLogPosition should be(insertMutation.nextPosition)
 
       queryAndWait(UPDATE) // should not immediately persist
-      Thread.sleep(1000)
 
       ChangeStream.connect()
-      Thread.sleep(5000)
+      ensureConnected
 
       queryAndWait(DELETE) // should persist because it is the second event processed by the saver
       queryAndWait(INSERT) // should not immediately persist
-      Thread.sleep(1000)
 
       expectMutation.mutation shouldBe a[Update]
       expectMutation.mutation shouldBe a[Delete]
@@ -328,7 +342,6 @@ class ChangeStreamSaverISpec extends Database with Config {
       getStoredBinLogPosition shouldNot be(finalMutation.nextPosition)
 
       app.interrupt
-      Thread.sleep(5000)
 
       //should save any pending position pre-exit
       getStoredBinLogPosition should be(finalMutation.nextPosition)
