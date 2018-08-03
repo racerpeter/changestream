@@ -80,12 +80,12 @@ object ChangeStreamEventListener extends EventListener {
     }
   }
 
-  def setPosition(position: String) = {
+  def setPosition(position: Option[String]) = {
     import akka.pattern.ask
     implicit val ec = system.dispatcher
     implicit val timeout = Timeout(5.seconds)
     positionSaver.map { saver =>
-      val saveFuture = saver.ask(SavePositionRequest(Some(position)))
+      val saveFuture = saver.ask(SavePositionRequest(position))
       val response = saveFuture map {
         case Some(position: String) =>
           Some(position)

@@ -18,9 +18,11 @@ import changestream.actors.ControlInterfaceActor
 import spray.can.Http
 
 object ChangeStream extends App {
-  protected val log = LoggerFactory.getLogger(getClass)
   protected implicit val system = ActorSystem("changestream")
+  protected implicit val ec = system.dispatcher
+  protected implicit val timeout = Timeout(10 seconds)
 
+  protected val log = LoggerFactory.getLogger(getClass)
   protected val config = ConfigFactory.load().getConfig("changestream")
   protected val mysqlHost = config.getString("mysql.host")
   protected val mysqlPort = config.getInt("mysql.port")
@@ -31,14 +33,23 @@ object ChangeStream extends App {
     config.getString("mysql.password")
   )
 
-  @volatile
-  protected var isPaused = false
-
-  protected val host = config.getString("control.host")
-  protected val port = config.getInt("control.port")
+  /** Start the HTTP server for status and control **/
+  protected val controlHost = config.getString("control.host")
+  protected val controlPort = config.getInt("control.port")
   protected val controlActor = system.actorOf(Props[ControlInterfaceActor], "control-interface")
-  protected implicit val ec = system.dispatcher
-  protected implicit val timeout = Timeout(10 seconds)
+  protected val controlBind = Http.Bind(
+    listener = controlActor,
+    interface = controlHost,
+    port = controlPort
+  )
+  protected val controlFuture = IO(Http).ask(controlBind).map {
+    case Http.Bound(address) =>
+      log.info(s"Control interface bound to ${address}")
+    case Http.CommandFailed(cmd) =>
+      log.warn(s"Control interface could not bind to ${controlHost}:${controlPort}, ${cmd.failureMessage}")
+  }
+
+  @volatile protected var isPaused = false
 
   /** Gracefully handle application shutdown from
     *  - Normal program exit
@@ -46,14 +57,6 @@ object ChangeStream extends App {
     *  - System reboot/shutdown
     */
   sys.addShutdownHook(terminateActorSystemAndWait)
-
-  /** Start the HTTP server for status and control **/
-  protected val controlFuture = IO(Http).ask(Http.Bind(listener = controlActor, interface = host, port = port)).map {
-    case Http.Bound(address) =>
-      log.info(s"Control interface bound to ${address}")
-    case Http.CommandFailed(cmd) =>
-      log.warn(s"Control interface could not bind to ${host}:${port}, ${cmd.failureMessage}")
-  }
 
   /** Every changestream instance must have a unique server-id.
     *
@@ -66,7 +69,6 @@ object ChangeStream extends App {
 
   /** Register the objects that will receive `onEvent` calls and deserialize data **/
   ChangeStreamEventListener.setConfig(config)
-
   client.registerEventListener(ChangeStreamEventListener)
   client.setEventDeserializer(ChangestreamEventDeserializer)
 
@@ -77,10 +79,8 @@ object ChangeStream extends App {
 
   def serverName = s"${mysqlHost}:${mysqlPort}"
   def clientId = client.getServerId
-
   def currentBinlogFilename = client.getBinlogFilename
   def currentBinlogPosition = client.getBinlogPosition
-
   def isConnected = client.isConnected
 
   def connect() = {
@@ -98,7 +98,6 @@ object ChangeStream extends App {
     if(client.isConnected()) {
       isPaused = true
       client.disconnect()
-      //TODO drain events?
       ChangeStreamEventListener.persistPosition
       true
     }
@@ -109,7 +108,7 @@ object ChangeStream extends App {
 
   def reset() = {
     if(!client.isConnected()) {
-      client.setBinlogFilename(null) //scalastyle:ignore
+      ChangeStreamEventListener.setPosition(None)
       Future { getConnected }
       true
     }
@@ -126,39 +125,37 @@ object ChangeStream extends App {
     client.unregisterEventListener(ChangeStreamEventListener)
     client.unregisterLifecycleListener(ChangeStreamLifecycleListener)
 
-    import akka.pattern.ask
-    implicit val timeout = Timeout(5.seconds)
-    val controlDisconnect = (IO(Http) ? Http.CloseAll).map(_ ⇒ Done)
-    Await.result(controlDisconnect, 60.seconds)
-
-    // TODO this could be cleaner-- like detecting a clean shutdown
+    val controlTermination = IO(Http).ask(Http.CloseAll).map(_ ⇒ Done)
     system.terminate()
-    Await.result(system.whenTerminated, 60 seconds)
+    Await.result(Future.sequence(List(controlTermination, system.whenTerminated)), 60 seconds)
+
+    // Do a final save, after we allow the actor system to exit cleanly
+    ChangeStreamEventListener.persistPosition
   }
 
   def getConnected = {
-    /** Finally, signal the BinaryLogClient to start processing events **/
     log.info(s"Starting changestream...")
+
+    val overridePosition = System.getProperty("OVERRIDE_POSITION")
+    System.setProperty("OVERRIDE_POSITION", "") // clear override after initial boot
+    if(overridePosition != null && overridePosition.length > 0) { //scalastyle:ignore
+      log.info(s"Overriding starting binlog position with OVERRIDE_POSITION=${overridePosition}")
+      ChangeStreamEventListener.setPosition(Some(overridePosition))
+    }
+
+    ChangeStreamEventListener.getStoredPosition match {
+      case Some(position) =>
+        log.info(s"Setting starting binlog position at ${position}")
+        val Array(fileName, posLong) = position.split(":")
+        client.setBinlogFilename(fileName)
+        client.setBinlogPosition(java.lang.Long.valueOf(posLong))
+      case None =>
+        client.setBinlogFilename(null) //scalastyle:ignore
+        client.setBinlogPosition(4L)
+    }
+
     while(!isPaused && !client.isConnected) {
       try {
-
-        val overridePosition = System.getProperty("OVERRIDE_POSITION")
-        if(overridePosition != null && overridePosition.length > 0) { //scalastyle:ignore
-          log.info(s"Overriding starting binlog position with OVERRIDE_POSITION=${overridePosition}")
-          ChangeStreamEventListener.setPosition(overridePosition)
-        }
-
-        ChangeStreamEventListener.getStoredPosition match {
-          case Some(position) =>
-            log.info(s"Setting starting binlog position at ${position}")
-            val Array(fileName, posLong) = position.split(":")
-            client.setBinlogFilename(fileName)
-            client.setBinlogPosition(java.lang.Long.valueOf(posLong))
-          case None =>
-            client.setBinlogFilename(null) //scalastyle:ignore
-            client.setBinlogPosition(4L)
-        }
-
         client.connect()
       }
       catch {

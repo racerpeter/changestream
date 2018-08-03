@@ -1,7 +1,6 @@
 package changestream
 
-import java.io.{File, FileOutputStream, OutputStreamWriter}
-import java.nio.charset.StandardCharsets
+import java.io.File
 
 import akka.actor.Props
 import akka.testkit.TestProbe
@@ -36,6 +35,7 @@ class ChangeStreamISpec extends Database with Config {
   val emitterProbe = TestProbe()
   val emitter = system.actorOf(Props(new StdoutActor(_ => positionSaver)), name = "emitterActor")
 
+  // Create the app thread
   val app = new Thread {
     override def run = ChangeStream.main(Array())
     override def interrupt = {
