@@ -281,7 +281,7 @@ class PositionSaverSpec extends Emitter with Config {
         initialPosition.position should be(None)
 
         saverMaxRecordsOne ! EmitterResult("position")
-        Thread.sleep(1000)
+        Thread.sleep(5000)
 
         val saverReloaded = TestActorRef(Props(classOf[PositionSaver], configWithOneMaxRecord))
 
