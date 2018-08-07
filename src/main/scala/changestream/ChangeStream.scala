@@ -122,15 +122,15 @@ object ChangeStream extends App {
 
     disconnect()
 
-    client.unregisterEventListener(ChangeStreamEventListener)
-    client.unregisterLifecycleListener(ChangeStreamLifecycleListener)
+    val shutdownFuture = IO(Http).ask(Http.CloseAll) flatMap { _ =>
+      system.terminate()
+      system.whenTerminated flatMap { _ =>
+        // Do a final save, after we allow the actor system to exit cleanly
+        ChangeStreamEventListener.persistPosition.map(_ => Done)
+      }
+    }
 
-    val controlTermination = IO(Http).ask(Http.CloseAll).map(_ ⇒ Done)
-    system.terminate()
-    Await.result(Future.sequence(List(controlTermination, system.whenTerminated)), 60 seconds)
-
-    // Do a final save, after we allow the actor system to exit cleanly
-    ChangeStreamEventListener.persistPosition
+    Await.result(shutdownFuture, 60 seconds)
   }
 
   def getConnected = {
