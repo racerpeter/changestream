@@ -2,7 +2,7 @@
 
 Changestream implements a custom [deserializer](https://github.com/shyiko/mysql-binlog-connector-java#controlling-event-deserialization) for binlog change events, and uses Akka Actors to perform several transformation steps to produce a formatted (pretty) JSON representation of the changes.
 
-The architecture of Changestream is designed so that event format and destination is easily extended with custom Formatter and Emitter classes.
+The architecture of Changestream is designed so that event format and destination is easily extended with custom Formatter, Emitter and PositionSaver classes.
 
 It is also designed with performance in mind. By separating the various steps of event deserialization, column information, formatting/encrypting, and emitting, it is easy to configure Akka such that these steps can be performed in different threads or even on different machines via Akka Remoting.
 
@@ -61,7 +61,6 @@ to `STDOUT`. If you intend to create a custom emitter, this could be a good plac
 ### MyNewProducerActor
 You probably see where this is going. More producer actors are welcome! They couldn't be easier to write, since all the
 heavy lifting of creating a JSON string is already done!
-
 ```
 package changestream.actors
 
@@ -83,3 +82,10 @@ class MyNewProducerActor extends Actor {
 }
 
 ```
+
+### PositionSaver
+The PositionSaver actor implements a basic file-based persistence for the last successful position saved. It can be
+configured to save the current position every *N* events, and/or every *N* milliseconds. When system throughput is high
+you may wish to save the position less often to avoid excessive system I/O. ChangeStream will always attempt to stop
+gracefully when sent a TERM signal, meaning no duplicates would be emitted. In the worst case, if ChangeStream is
+stopped unexpectedly, events processed since the last position save would be re-emitted.
