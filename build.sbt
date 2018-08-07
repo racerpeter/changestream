@@ -1,4 +1,4 @@
-val nextRelease = "0.2.3"
+val nextRelease = "0.3.0"
 val scalaVer = "2.11.11"
 
 lazy val projectInfo = Seq(
