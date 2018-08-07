@@ -17,7 +17,8 @@ class StdoutActorSpec extends Emitter with Config {
     "Print to stdout and forward result" in {
       actorRef ! message
 
-      probe.expectMsgType[EmitterResult](5000 milliseconds)
+      val result = probe.expectMsgType[EmitterResult](5000 milliseconds)
+      result.position should be(message.nextPosition)
     }
   }
 }

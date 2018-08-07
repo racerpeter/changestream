@@ -25,7 +25,8 @@ class SnsActorSpec extends Emitter with Config {
     "Immediately publish the message to SNS" in {
       actorRef ! message
 
-      probe.expectMsgType[EmitterResult](5000 milliseconds)
+      val result = probe.expectMsgType[EmitterResult](5000 milliseconds)
+      result.position should be(message.nextPosition)
     }
   }
 
@@ -33,7 +34,8 @@ class SnsActorSpec extends Emitter with Config {
     "Should correctly publish the message when the topic contains interpolated database and/or tableName" in {
       snsWithInterpolation ! message
 
-      probe.expectMsgType[EmitterResult](5000 milliseconds)
+      val result = probe.expectMsgType[EmitterResult](5000 milliseconds)
+      result.position should be(message.nextPosition)
     }
   }
 }
