@@ -13,7 +13,7 @@ import com.github.shyiko.mysql.binlog.event.EventType._
 import org.slf4j.LoggerFactory
 import com.typesafe.config.Config
 
-import scala.concurrent.Await
+import scala.concurrent.{Await, Future}
 
 object ChangeStreamEventListener extends EventListener {
   protected val log = LoggerFactory.getLogger(getClass)
@@ -84,6 +84,7 @@ object ChangeStreamEventListener extends EventListener {
     import akka.pattern.ask
     implicit val ec = system.dispatcher
     implicit val timeout = Timeout(5.seconds)
+
     positionSaver.map { saver =>
       val saveFuture = saver.ask(SavePositionRequest(position))
       val response = saveFuture map {
@@ -105,20 +106,19 @@ object ChangeStreamEventListener extends EventListener {
     import akka.pattern.ask
     implicit val ec = system.dispatcher
     implicit val timeout = Timeout(5.seconds)
-    positionSaver.map { saver =>
-      val saveFuture = saver.ask(SaveCurrentPositionRequest)
-      val response = saveFuture map {
-        case Some(position: String) =>
-          Some(position)
-        case _ =>
-          log.error("Failed to set position in position saver actor-- this should not happen!")
-          None
-      } recover {
-        case _: java.util.concurrent.TimeoutException =>
-          log.error("Timed out getting position from position saver actor!!")
-          None
-      }
-      Await.result[Option[String]](response, 6.seconds)
+
+    positionSaver match {
+      case Some(saver) =>
+        saver.ask(SaveCurrentPositionRequest) map {
+          case Some(position: String) =>
+            Some(position)
+          case _ =>
+            log.error("Failed to set position in position saver actor-- this should not happen!")
+            None
+        }
+      case None =>
+        log.error("Position saver actor is missing-- this should not happen!")
+        Future { None }
     }
   }
 
