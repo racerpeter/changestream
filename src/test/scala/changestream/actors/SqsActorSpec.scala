@@ -43,7 +43,7 @@ class SqsActorSpec extends Emitter with Config {
     "Add the messages to the SQS queue in multiple batches of one message" in {
       actorRef ! message
       Thread.sleep(500)
-      actorRef ! message
+      actorRef ! message.copy(nextPosition = "FOOBAZ")
 
       val result1 = probe.expectMsgType[EmitterResult](5000 milliseconds)
       val result2 = probe.expectMsgType[EmitterResult](5000 milliseconds)
