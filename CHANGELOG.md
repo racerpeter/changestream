@@ -4,6 +4,7 @@
 
 - Added PositionSaver to persist the last emitted position for graceful restarts
 - Allow starting position to be overridden via an environment variable `OVERRIDE_POSITION`
+- Allow restriction of the captured SQL string length via the `SQL_CHARACTER_LIMIT` environment variable
 
 ## 0.2.3 (2017-09-06)
 
