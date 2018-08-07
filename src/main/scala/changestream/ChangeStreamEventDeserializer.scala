@@ -10,7 +10,7 @@ import com.github.shyiko.mysql.binlog.io.ByteArrayInputStream
 import com.typesafe.config.{Config, ConfigFactory}
 
 object ChangestreamEventDeserializerConfig {
-  // TODO refactor this to not be so gross. consider a global config singleton that we can use everywhere
+  // TODO consider a global config singleton that we can use everywhere
   protected var _config:Option[Config] = None
   protected val defaultSqlCharacterLimit = 0 // this default needs to be in sync with the application.conf default
   protected var _sqlCharacterLimit:Int = defaultSqlCharacterLimit
