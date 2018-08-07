@@ -8,7 +8,7 @@ import com.github.shyiko.mysql.binlog.BinaryLogClient
 import com.typesafe.config.ConfigFactory
 import org.slf4j.LoggerFactory
 
-import scala.concurrent.Await
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import akka.pattern.ask
@@ -125,16 +125,11 @@ object ChangeStream extends App {
     disconnect()
 
     val shutdownFuture = for {
+      _ <- drainMessages(None, 5 seconds, 12)
       _ <- IO(Http).ask(Http.CloseAll)
       _ <- terminateActorSystem
-      _ <- ChangeStreamEventListener.persistPosition
     } yield Done
     Await.result(shutdownFuture, 60 seconds)
-  }
-
-  protected def terminateActorSystem = {
-    system.terminate()
-    system.whenTerminated
   }
 
   def getConnected = {
@@ -182,6 +177,27 @@ object ChangeStream extends App {
           terminateActorSystemAndWait
           sys.exit(1)
       }
+    }
+  }
+
+  protected def terminateActorSystem = {
+    system.terminate()
+    system.whenTerminated
+  }
+
+  protected def drainMessages(lastPosition: Option[String], expectNoPositionChangesForDuration: FiniteDuration, retries: Int): Future[Any] = {
+    import akka.pattern.after
+    ChangeStreamEventListener.persistPosition flatMap {
+      case position if position != lastPosition && retries > 0 =>
+        println(s"Saw different position and retries is ${retries}")
+        after(expectNoPositionChangesForDuration, system.scheduler)(drainMessages(position, expectNoPositionChangesForDuration, retries - 1))
+      case position if position == lastPosition =>
+        println(s"Saw same position and retries is ${retries}")
+        Future { position }
+      case position =>
+        println(s"Saw different position and retries is ${retries} -- couldn't drain")
+        log.error("Could't drain position before timeout.")
+        Future { position }
     }
   }
 }
