@@ -5,7 +5,7 @@ import spray.httpx.SprayJsonSupport._
 import spray.routing._
 import akka.actor._
 import ch.qos.logback.classic.Level
-import changestream.{ChangeStream, ChangeStreamEventListener, ChangestreamEventDeserializer}
+import changestream.{ChangeStream, ChangeStreamEventListener, ChangeStreamEventDeserializer}
 import org.slf4j.LoggerFactory
 import ch.qos.logback.classic.Logger
 import spray.routing.HttpService
@@ -26,7 +26,7 @@ trait ControlInterface extends HttpService with DefaultJsonProtocol {
   protected val log = LoggerFactory.getLogger(getClass)
 
   implicit val memoryInfoFormat = jsonFormat3(MemoryInfo)
-  implicit val statusFormat = jsonFormat6(Status)
+  implicit val statusFormat = jsonFormat7(Status)
   implicit val successFormat = jsonFormat1(Success)
   implicit val errorFormat = jsonFormat1(Error)
   implicit val logLevelFormat = jsonFormat1(LogLevel)
@@ -147,8 +147,9 @@ trait ControlInterface extends HttpService with DefaultJsonProtocol {
       ChangeStream.serverName,
       ChangeStream.clientId,
       ChangeStream.isConnected,
+      s"${ChangeStream.currentBinlogFilename}:${ChangeStream.currentBinlogPosition}",
       storedPosition.getOrElse(""),
-      ChangestreamEventDeserializer.getCurrentSequenceNumber,
+      ChangeStreamEventDeserializer.getCurrentSequenceNumber,
       MemoryInfo(
         Runtime.getRuntime().totalMemory(),
         Runtime.getRuntime().maxMemory(),
@@ -163,7 +164,8 @@ object ControlActor {
                      server: String,
                      clientId: Long,
                      isConnected: Boolean,
-                     binlogPosition: String,
+                     binlogClientPosition: String,
+                     binlogLastStoredPosition: String,
                      sequenceNumber: Long,
                      memoryInfo: MemoryInfo
                    )

@@ -26,11 +26,10 @@ object ChangestreamEventDeserializerConfig {
   def sqlCharacterLimit = _sqlCharacterLimit
 }
 
-object ChangestreamEventDeserializer extends {
+object ChangeStreamEventDeserializer extends {
   val tableMapData = new util.HashMap[java.lang.Long, TableMapEventData]
   private val _deserializers = new util.IdentityHashMap[EventType, EventDataDeserializer[_ <: EventData]]
   var lastQuery: Option[String] = None
-  var lastPosition: Option[String] = None
 } with EventDeserializer(new EventHeaderV4Deserializer, new NullEventDataDeserializer, _deserializers, tableMapData) {
   setEventDataDeserializer(EventType.QUERY, new QueryEventDataDeserializer)
   setEventDataDeserializer(EventType.TABLE_MAP, new TableMapEventDataDeserializer)
@@ -76,8 +75,8 @@ class InsertDeserializer(
       rows,
       tableMap.get(result.getTableId).getDatabase,
       tableMap.get(result.getTableId).getTable,
-      ChangestreamEventDeserializer.lastQuery,
-      ChangestreamEventDeserializer.getNextSequenceNumber(rows.size)
+      ChangeStreamEventDeserializer.lastQuery,
+      ChangeStreamEventDeserializer.getNextSequenceNumber(rows.size)
     )
   }
 }
@@ -102,8 +101,8 @@ class UpdateDeserializer(
       oldRows,
       tableMap.get(result.getTableId).getDatabase,
       tableMap.get(result.getTableId).getTable,
-      ChangestreamEventDeserializer.lastQuery,
-      ChangestreamEventDeserializer.getNextSequenceNumber(rows.size)
+      ChangeStreamEventDeserializer.lastQuery,
+      ChangeStreamEventDeserializer.getNextSequenceNumber(rows.size)
     )
   }
 }
@@ -125,8 +124,8 @@ class DeleteDeserializer(
       rows,
       tableMap.get(result.getTableId).getDatabase,
       tableMap.get(result.getTableId).getTable,
-      ChangestreamEventDeserializer.lastQuery,
-      ChangestreamEventDeserializer.getNextSequenceNumber(rows.size)
+      ChangeStreamEventDeserializer.lastQuery,
+      ChangeStreamEventDeserializer.getNextSequenceNumber(rows.size)
     )
   }
 }
@@ -142,7 +141,7 @@ object RowsQueryDeserializer extends EventDataDeserializer[EventData] {
     }
     inputStream.skipToTheEndOfTheBlock()
 
-    ChangestreamEventDeserializer.lastQuery = Some(query)
+    ChangeStreamEventDeserializer.lastQuery = Some(query)
 
     null //scalastyle:ignore
   }

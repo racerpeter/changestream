@@ -20,7 +20,7 @@ class RowsQueryDeserializerSpec extends Base with Config {
     "Capture all of the SQL" in {
       RowsQueryDeserializer.deserialize(inputStream)
 
-      ChangestreamEventDeserializer.lastQuery should be(Some(sqlString))
+      ChangeStreamEventDeserializer.lastQuery should be(Some(sqlString))
       inputStream.available() should be (0)
     }
   }
@@ -31,7 +31,7 @@ class RowsQueryDeserializerSpec extends Base with Config {
       ChangestreamEventDeserializerConfig.setConfig(bigLimitConfig)
       RowsQueryDeserializer.deserialize(inputStream)
 
-      ChangestreamEventDeserializer.lastQuery should be(Some(sqlString))
+      ChangeStreamEventDeserializer.lastQuery should be(Some(sqlString))
       inputStream.available() should be (0)
     }
 
@@ -41,7 +41,7 @@ class RowsQueryDeserializerSpec extends Base with Config {
         ChangestreamEventDeserializerConfig.setConfig(smallLimitConfig)
         RowsQueryDeserializer.deserialize(inputStream)
 
-        ChangestreamEventDeserializer.lastQuery should be(Some(sqlString.substring(0, 5)))
+        ChangeStreamEventDeserializer.lastQuery should be(Some(sqlString.substring(0, 5)))
         inputStream.available() should be (0)
       }
     }
