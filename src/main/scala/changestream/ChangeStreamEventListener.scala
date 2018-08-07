@@ -13,7 +13,7 @@ import com.github.shyiko.mysql.binlog.event.EventType._
 import org.slf4j.LoggerFactory
 import com.typesafe.config.Config
 
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Future
 
 object ChangeStreamEventListener extends EventListener {
   protected val log = LoggerFactory.getLogger(getClass)
@@ -59,69 +59,6 @@ object ChangeStreamEventListener extends EventListener {
     }
   }
 
-  def getStoredPosition:Option[String] = {
-    import akka.pattern.ask
-    implicit val ec = system.dispatcher
-    implicit val timeout = Timeout(5.seconds)
-    positionSaver.flatMap { saver =>
-      val getFuture = saver.ask(GetPositionRequest)
-      val response = getFuture map {
-        case GetPositionResponse(position) =>
-          position
-        case _ =>
-          log.error("Failed to get position from position saver actor-- this should not happen!")
-          None
-      } recover {
-        case _: java.util.concurrent.TimeoutException =>
-          log.error("Timed out getting position from position saver actor!!")
-          None
-      }
-      Await.result[Option[String]](response, 6.seconds)
-    }
-  }
-
-  def setPosition(position: Option[String]) = {
-    import akka.pattern.ask
-    implicit val ec = system.dispatcher
-    implicit val timeout = Timeout(5.seconds)
-
-    positionSaver.map { saver =>
-      val saveFuture = saver.ask(SavePositionRequest(position))
-      val response = saveFuture map {
-        case Some(position: String) =>
-          Some(position)
-        case _ =>
-          log.error("Failed to set position in position saver actor-- this should not happen!")
-          None
-      } recover {
-        case _: java.util.concurrent.TimeoutException =>
-          log.error("Timed out getting position from position saver actor!!")
-          None
-      }
-      Await.result[Option[String]](response, 6.seconds)
-    }
-  }
-
-  def persistPosition = {
-    import akka.pattern.ask
-    implicit val ec = system.dispatcher
-    implicit val timeout = Timeout(5.seconds)
-
-    positionSaver match {
-      case Some(saver) =>
-        saver.ask(SaveCurrentPositionRequest) map {
-          case Some(position: String) =>
-            Some(position)
-          case _ =>
-            log.error("Failed to set position in position saver actor-- this should not happen!")
-            None
-        }
-      case None =>
-        log.error("Position saver actor is missing-- this should not happen!")
-        Future { None }
-    }
-  }
-
   protected def getEmitterLoader: (ActorRefFactory => ActorRef) = _ => emitter match {
     case None => system.actorOf(Props(new StdoutActor(getPositionSaverLoader)), name = "emitterActor")
     case Some(emitter) => emitter
@@ -147,6 +84,27 @@ object ChangeStreamEventListener extends EventListener {
     * @param actor your actor ref
     */
   def setEmitter(actor: ActorRef) = emitter = Some(actor)
+
+  def getStoredPosition = askPositionSaver(GetPositionRequest)
+  def setPosition(position: Option[String]) = askPositionSaver(SavePositionRequest(position))
+  def persistPosition = askPositionSaver(SaveCurrentPositionRequest)
+
+  protected def askPositionSaver(message: Any): Future[Option[String]] = {
+    import akka.pattern.ask
+    implicit val ec = system.dispatcher
+    implicit val timeout = Timeout(60.seconds)
+
+    positionSaver match {
+      case Some(saver) =>
+        saver.ask(message) map {
+          case GetPositionResponse(maybePosition: Option[String]) =>
+            maybePosition
+        }
+      case None =>
+        log.error("Position saver actor is not initialized!!!!!!!!")
+        throw new Exception("Position saver actor is not initialized!!!!!!!!")
+    }
+  }
 
   /** Sends binlog events to the appropriate changestream actor.
     *

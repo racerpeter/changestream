@@ -6,7 +6,6 @@ import java.nio.charset.StandardCharsets
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import akka.actor.{Actor, ActorRef, Cancellable}
-import changestream.events.MutationWithInfo
 import com.typesafe.config.{Config, ConfigFactory}
 import org.slf4j.LoggerFactory
 
@@ -88,7 +87,7 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
       })
       saverWriter.close()
 
-      sender.map(_ ! akka.actor.Status.Success(position))
+      sender.map(_ ! akka.actor.Status.Success(GetPositionResponse(position)))
     } catch {
       case exception: IOException =>
         log.error(s"Failed to write position to position file (${SAVER_FILE_PATH}): ${exception.getMessage}")

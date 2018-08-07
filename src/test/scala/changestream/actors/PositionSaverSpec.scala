@@ -2,7 +2,7 @@ package changestream.actors
 
 import java.io.File
 
-import akka.actor.{PoisonPill, Props}
+import akka.actor.Props
 import akka.testkit.TestActorRef
 import akka.pattern.ask
 import changestream.actors.PositionSaver._

@@ -11,6 +11,7 @@ import ch.qos.logback.classic.Logger
 import spray.routing.HttpService
 import spray.json.DefaultJsonProtocol
 
+import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
@@ -140,11 +141,13 @@ trait ControlInterface extends HttpService with DefaultJsonProtocol {
   }
 
   def getStatus = {
+    val storedPosition = Await.result(ChangeStreamEventListener.getStoredPosition, 60 seconds)
+
     Status(
       ChangeStream.serverName,
       ChangeStream.clientId,
       ChangeStream.isConnected,
-      ChangeStreamEventListener.getStoredPosition.getOrElse(""),
+      storedPosition.getOrElse(""),
       ChangestreamEventDeserializer.getCurrentSequenceNumber,
       MemoryInfo(
         Runtime.getRuntime().totalMemory(),

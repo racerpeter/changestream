@@ -8,7 +8,7 @@ import com.github.shyiko.mysql.binlog.BinaryLogClient
 import com.typesafe.config.ConfigFactory
 import org.slf4j.LoggerFactory
 
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import akka.pattern.ask
@@ -86,7 +86,7 @@ object ChangeStream extends App {
   def connect() = {
     if(!client.isConnected()) {
       isPaused = false
-      Future { getConnected }
+      Await.result(getConnected, 60.seconds)
       true
     }
     else {
@@ -98,7 +98,7 @@ object ChangeStream extends App {
     if(client.isConnected()) {
       isPaused = true
       client.disconnect()
-      ChangeStreamEventListener.persistPosition
+      Await.result(ChangeStreamEventListener.persistPosition, 60.seconds)
       true
     }
     else {
@@ -108,9 +108,11 @@ object ChangeStream extends App {
 
   def reset() = {
     if(!client.isConnected()) {
-      ChangeStreamEventListener.setPosition(None)
-      Future { getConnected }
-      true
+      val f = for {
+        _ <- ChangeStreamEventListener.setPosition(None)
+        _ <- getConnected
+      } yield true
+      Await.result(f, 60.seconds)
     }
     else {
       false
@@ -122,15 +124,17 @@ object ChangeStream extends App {
 
     disconnect()
 
-    val shutdownFuture = IO(Http).ask(Http.CloseAll) flatMap { _ =>
-      system.terminate()
-      system.whenTerminated flatMap { _ =>
-        // Do a final save, after we allow the actor system to exit cleanly
-        ChangeStreamEventListener.persistPosition.map(_ => Done)
-      }
-    }
-
+    val shutdownFuture = for {
+      _ <- IO(Http).ask(Http.CloseAll)
+      _ <- terminateActorSystem
+      _ <- ChangeStreamEventListener.persistPosition
+    } yield Done
     Await.result(shutdownFuture, 60 seconds)
+  }
+
+  protected def terminateActorSystem = {
+    system.terminate()
+    system.whenTerminated
   }
 
   def getConnected = {
@@ -138,29 +142,40 @@ object ChangeStream extends App {
 
     val overridePosition = System.getProperty("OVERRIDE_POSITION")
     System.setProperty("OVERRIDE_POSITION", "") // clear override after initial boot
-    if(overridePosition != null && overridePosition.length > 0) { //scalastyle:ignore
-      log.info(s"Overriding starting binlog position with OVERRIDE_POSITION=${overridePosition}")
-      ChangeStreamEventListener.setPosition(Some(overridePosition))
+
+    val getPositionFuture = overridePosition match {
+      case overridePosition:String if overridePosition.length > 0 =>
+        log.info(s"Overriding starting binlog position with OVERRIDE_POSITION=${overridePosition}")
+        ChangeStreamEventListener.setPosition(Some(overridePosition))
+      case _ =>
+        ChangeStreamEventListener.getStoredPosition
     }
 
-    ChangeStreamEventListener.getStoredPosition match {
-      case Some(position) =>
-        log.info(s"Setting starting binlog position at ${position}")
-        val Array(fileName, posLong) = position.split(":")
-        client.setBinlogFilename(fileName)
-        client.setBinlogPosition(java.lang.Long.valueOf(posLong))
-      case None =>
-        client.setBinlogFilename(null) //scalastyle:ignore
-        client.setBinlogPosition(4L)
+    getPositionFuture.map { position =>
+      setBinlogClientPosition(position)
+      getInternalClientConnected
     }
+  }
 
+  protected def setBinlogClientPosition(position: Option[String]) = position match {
+    case Some(position) =>
+      log.info(s"Setting starting binlog position at ${position}")
+      val Array(fileName, posLong) = position.split(":")
+      client.setBinlogFilename(fileName)
+      client.setBinlogPosition(java.lang.Long.valueOf(posLong))
+    case None =>
+      client.setBinlogFilename(null) //scalastyle:ignore
+      client.setBinlogPosition(4L)
+  }
+
+  protected def getInternalClientConnected = {
     while(!isPaused && !client.isConnected) {
       try {
-        client.connect()
+        client.connect(5000)
       }
       catch {
         case e: IOException =>
-          log.error("Failed to connect to MySQL to stream the binlog, retrying...", e)
+          log.error("Failed to connect to MySQL to stream the binlog, retrying in 5 seconds...", e)
           Thread.sleep(5000)
         case e: Exception =>
           log.error("Failed to connect, exiting.", e)
