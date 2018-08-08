@@ -79,8 +79,6 @@ object ChangeStream extends App {
 
   def serverName = s"${mysqlHost}:${mysqlPort}"
   def clientId = client.getServerId
-  def currentBinlogFilename = client.getBinlogFilename
-  def currentBinlogPosition = client.getBinlogPosition
   def isConnected = client.isConnected
 
   def connect() = {
@@ -159,6 +157,7 @@ object ChangeStream extends App {
       client.setBinlogFilename(fileName)
       client.setBinlogPosition(java.lang.Long.valueOf(posLong))
     case None =>
+      log.info(s"Starting binlog position in real time")
       client.setBinlogFilename(null) //scalastyle:ignore
       client.setBinlogPosition(4L)
   }
