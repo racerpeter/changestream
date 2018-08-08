@@ -42,6 +42,7 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
     cancellableSchedule = MAX_WAIT.length match {
       case 0 => None
       case _ => Some(scheduler.scheduleOnce(MAX_WAIT) {
+        log.debug(s"Initiating delayed save.")
         self.tell(SaveCurrentPositionRequest, origSender)
       })
     }
@@ -101,40 +102,47 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
   override def preStart() = {
     restoreLastSavedPosition
     writePosition(currentPosition)
-    log.info(s"Ready to save positions to file ${SAVER_FILE_PATH}.")
+    log.info(s"Ready to save positions to file ${SAVER_FILE_PATH} (max-records=${MAX_RECORDS}, max-wait=${MAX_WAIT}).")
   }
 
   override def postStop() = cancelDelayedSave
 
   def receive = {
     case EmitterResult(position, meta) =>
-      log.debug(s"Received position: ${position}")
-
       currentRecordCount += 1
       currentPosition = Some(position)
 
       currentRecordCount match {
         case MAX_RECORDS =>
+          log.debug(s"Received position: ${position} (persisting immediately)")
           writePosition(currentPosition, Some(sender()))
         case _ =>
+          log.debug(s"Received position: ${position} (setting delayed save)")
           setDelayedSave(sender())
       }
 
     case SavePositionRequest(overridePosition: Option[String]) =>
+      log.debug(s"Received request to save override position: ${overridePosition} (old position: ${currentPosition})")
       currentPosition = overridePosition
       writePosition(currentPosition, Some(sender()))
 
     case SaveCurrentPositionRequest =>
+      log.debug(s"Received request to save current position: ${currentPosition}")
       writePosition(currentPosition, Some(sender()))
 
     case GetPositionRequest =>
+      log.debug(s"Received request for current position: ${currentPosition}")
       sender() ! GetPositionResponse(currentPosition)
 
     case GetLastSavedPositionRequest =>
-      sender() ! GetPositionResponse(readPosition)
+      val lastSavedPosition = readPosition
+      log.debug(s"Received request for last saved position: ${lastSavedPosition} (current: ${currentPosition}")
+      sender() ! GetPositionResponse(lastSavedPosition)
 
     case RestoreLastSavedPositionRequest =>
+      val previousPosition = currentPosition
       restoreLastSavedPosition
+      log.debug(s"Received request to restore last saved position: ${currentPosition} (previously: ${previousPosition}")
       sender() ! GetPositionResponse(currentPosition)
   }
 }
