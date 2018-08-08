@@ -122,12 +122,12 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
       }
 
     case SavePositionRequest(overridePosition: Option[String]) =>
-      log.debug(s"Received request to save override position: ${overridePosition} (old position: ${currentPosition})")
+      log.debug(s"Saving override position: ${overridePosition} (old position: ${currentPosition})")
       currentPosition = overridePosition
       writePosition(currentPosition, Some(sender()))
 
     case SaveCurrentPositionRequest =>
-      log.debug(s"Received request to save current position: ${currentPosition}")
+      log.debug(s"Saving current position: ${currentPosition}")
       writePosition(currentPosition, Some(sender()))
 
     case GetPositionRequest =>
@@ -142,7 +142,7 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
     case RestoreLastSavedPositionRequest =>
       val previousPosition = currentPosition
       restoreLastSavedPosition
-      log.debug(s"Received request to restore last saved position: ${currentPosition} (previously: ${previousPosition}")
+      log.debug(s"Restoring last saved position: ${currentPosition} (previously: ${previousPosition}")
       sender() ! GetPositionResponse(currentPosition)
   }
 }
