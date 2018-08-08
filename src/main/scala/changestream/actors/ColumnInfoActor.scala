@@ -130,7 +130,8 @@ class ColumnInfoActor (
         throw exception
     } map {
       case Some(result) => self ! result
-      case None => log.warn(s"No column metadata found for table ${database}.${tableName}")
+      case None =>
+        log.error(s"No column metadata found for table ${database}.${tableName}. It is likely that the database schema has been modified.")
     }
   }
 
