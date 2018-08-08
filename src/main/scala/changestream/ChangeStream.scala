@@ -3,7 +3,7 @@ package changestream
 import java.io.IOException
 
 import akka.Done
-import akka.actor.{ActorSystem, Props}
+import akka.actor.{ActorSystem, CoordinatedShutdown, Props}
 import com.github.shyiko.mysql.binlog.BinaryLogClient
 import com.typesafe.config.ConfigFactory
 import org.slf4j.LoggerFactory
@@ -56,7 +56,18 @@ object ChangeStream extends App {
     *  - TERM signal
     *  - System reboot/shutdown
     */
-  sys.addShutdownHook(terminateActorSystemAndWait)
+  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceUnbind, "disconnectBinlogClient") { () =>
+    log.info("Initiating shutdown...")
+
+    Future {
+      client.disconnect()
+    }.flatMap(_ => ChangeStreamEventListener.persistPosition).map(_ => Done)
+  }
+  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceStop, "stopControlServer") { () =>
+    log.info("Shutting down control server...")
+
+    IO(Http).ask(Http.CloseAll).map(_ => Done)
+  }
 
   /** Every changestream instance must have a unique server-id.
     *
@@ -117,17 +128,8 @@ object ChangeStream extends App {
     }
   }
 
-  def terminateActorSystemAndWait = {
-    log.info("Shutting down...")
-
-    disconnect()
-
-    val shutdownFuture = for {
-      _ <- drainMessages(None, 5 seconds, 12)
-      _ <- IO(Http).ask(Http.CloseAll)
-      _ <- terminateActorSystem
-    } yield Done
-    Await.result(shutdownFuture, 60 seconds)
+  def shutdown() = {
+    CoordinatedShutdown(system).run(CoordinatedShutdown.JvmExitReason)
   }
 
   def getConnected = {
@@ -173,30 +175,8 @@ object ChangeStream extends App {
           Thread.sleep(5000)
         case e: Exception =>
           log.error("Failed to connect, exiting.", e)
-          terminateActorSystemAndWait
-          sys.exit(1)
+          shutdown().map(_ => sys.exit(1))
       }
-    }
-  }
-
-  protected def terminateActorSystem = {
-    system.terminate()
-    system.whenTerminated
-  }
-
-  protected def drainMessages(lastPosition: Option[String], expectNoPositionChangesForDuration: FiniteDuration, retries: Int): Future[Any] = {
-    import akka.pattern.after
-    ChangeStreamEventListener.persistPosition flatMap {
-      case position if position != lastPosition && retries > 0 =>
-        println(s"Saw different position and retries is ${retries}")
-        after(expectNoPositionChangesForDuration, system.scheduler)(drainMessages(position, expectNoPositionChangesForDuration, retries - 1))
-      case position if position == lastPosition =>
-        println(s"Saw same position and retries is ${retries}")
-        Future { position }
-      case position =>
-        println(s"Saw different position and retries is ${retries} -- couldn't drain")
-        log.error("Could't drain position before timeout.")
-        Future { position }
     }
   }
 }

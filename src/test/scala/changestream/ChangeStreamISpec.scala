@@ -2,7 +2,7 @@ package changestream
 
 import java.io.File
 
-import akka.actor.Props
+import akka.actor.{CoordinatedShutdown, Props}
 import akka.testkit.TestProbe
 import changestream.actors.PositionSaver._
 import changestream.actors.{PositionSaver, StdoutActor}
@@ -39,7 +39,7 @@ class ChangeStreamISpec extends Database with Config {
   val app = new Thread {
     override def run = ChangeStream.main(Array())
     override def interrupt = {
-      ChangeStream.terminateActorSystemAndWait
+      Await.result(ChangeStream.shutdown(), 60 seconds)
       super.interrupt
     }
   }
