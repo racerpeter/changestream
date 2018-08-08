@@ -26,7 +26,8 @@ object ChangeStreamEventListener extends EventListener {
   @volatile protected var positionSaver: Option[ActorRef] = None
   @volatile protected var emitter: Option[ActorRef] = None
   @volatile protected var currentBinlogFile: Option[String] = None
-  @volatile protected var currentSafeBinlogPosition: Option[Long] = None
+  @volatile protected var currentRowsQueryPosition: Option[Long] = None
+  @volatile protected var currentTableMapPosition: Option[Long] = None
 
   protected lazy val formatterActor = system.actorOf(Props(new JsonFormatterActor(_ => emitter.get)), name = "formatterActor")
   protected lazy val columnInfoActor = system.actorOf(Props(new ColumnInfoActor(_ => formatterActor)), name = "columnInfoActor")
@@ -132,10 +133,14 @@ object ChangeStreamEventListener extends EventListener {
 
   def getNextPosition: String = {
     // TODO make position a case class so we can use position.copy(position = 123) notation
-    s"${currentBinlogFile.get}:${currentSafeBinlogPosition.get.toString}"
+    val safePosition = currentRowsQueryPosition.getOrElse(currentTableMapPosition.get)
+    s"${currentBinlogFile.get}:${safePosition.toString}"
   }
 
-  def getCurrentPosition = s"${currentBinlogFile.getOrElse("")}:${currentSafeBinlogPosition.getOrElse("").toString}"
+  def getCurrentPosition = {
+    val safePosition = currentRowsQueryPosition.getOrElse(currentTableMapPosition.getOrElse(0L))
+    s"${currentBinlogFile.getOrElse("<not started>")}:${safePosition.toString}"
+  }
 
   /** Returns the appropriate ChangeEvent case object given a binlog event object.
     *
@@ -144,6 +149,7 @@ object ChangeStreamEventListener extends EventListener {
     */
   def getChangeEvent(event: Event): Option[ChangeEvent] = {
     val header = event.getHeader[EventHeaderV4]
+    log.info(s"Got event of type ${header.getEventType} with ${header.getNextPosition}")
 
     header.getEventType match {
       case eventType if EventType.isRowMutation(eventType) =>
@@ -153,6 +159,7 @@ object ChangeStreamEventListener extends EventListener {
         Some(Gtid(event.getData[GtidEventData].getGtid))
 
       case XID =>
+        currentRowsQueryPosition = None
         Some(CommitTransaction)
 
       case QUERY =>
@@ -166,16 +173,20 @@ object ChangeStreamEventListener extends EventListener {
       case ROTATE =>
         val rotateEvent = event.getData[RotateEventData]
         currentBinlogFile = Some(rotateEvent.getBinlogFilename)
-        currentSafeBinlogPosition = Some(rotateEvent.getBinlogPosition)
+        currentRowsQueryPosition = None
+        currentTableMapPosition = Some(header.getPosition)
         None
 
       case TABLE_MAP =>
-        currentSafeBinlogPosition = Some(header.getPosition)
+        currentTableMapPosition = Some(header.getPosition)
+        None
+
+      case ROWS_QUERY =>
+        currentRowsQueryPosition = Some(header.getPosition)
         None
 
       // Known events that are safe to ignore
       case PREVIOUS_GTIDS => None
-      case ROWS_QUERY => None
       case ANONYMOUS_GTID => None
       case STOP => None
 
