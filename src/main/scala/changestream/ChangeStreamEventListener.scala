@@ -25,7 +25,7 @@ object ChangeStreamEventListener extends EventListener {
 
   @volatile protected var positionSaver: Option[ActorRef] = None
   @volatile protected var emitter: Option[ActorRef] = None
-  @volatile protected var lastSeenPosition: Option[String] = None
+  @volatile protected var currentPosition: Option[String] = None
 
   protected lazy val formatterActor = system.actorOf(Props(new JsonFormatterActor(_ => emitter.get)), name = "formatterActor")
   protected lazy val columnInfoActor = system.actorOf(Props(new ColumnInfoActor(_ => formatterActor)), name = "columnInfoActor")
@@ -131,16 +131,16 @@ object ChangeStreamEventListener extends EventListener {
 
   def getNextPosition(eventNextPosition: Long): String = {
     // TODO make position a case class so we can use position.copy(position = 123) notation
-    lastSeenPosition = eventNextPosition match {
-      case 0L => lastSeenPosition
+    currentPosition = eventNextPosition match {
+      case 0L => currentPosition
       case _ =>
-        val Array(binlogFile, _) = lastSeenPosition.get.split(":")
+        val Array(binlogFile, _) = currentPosition.get.split(":")
         Some(s"${binlogFile}:${eventNextPosition.toString}")
     }
-    lastSeenPosition.get
+    currentPosition.get
   }
 
-  def getLastSeenPosition = lastSeenPosition.getOrElse("")
+  def getCurrentPosition = currentPosition.getOrElse("")
 
   /** Returns the appropriate ChangeEvent case object given a binlog event object.
     *
@@ -170,7 +170,7 @@ object ChangeStreamEventListener extends EventListener {
 
       case ROTATE =>
         val rotateEvent = event.getData[RotateEventData]
-        lastSeenPosition = Some(s"${rotateEvent.getBinlogFilename}:${rotateEvent.getBinlogPosition}")
+        currentPosition = Some(s"${rotateEvent.getBinlogFilename}:${rotateEvent.getBinlogPosition}")
         None
 
       // Known events that are safe to ignore

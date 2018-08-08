@@ -147,9 +147,9 @@ trait ControlInterface extends HttpService with DefaultJsonProtocol {
       server = ChangeStream.serverName,
       clientId = ChangeStream.clientId,
       isConnected = ChangeStream.isConnected,
-      binlogClientPosition = ChangeStreamEventListener.getLastSeenPosition,
+      binlogClientPosition = ChangeStreamEventListener.getCurrentPosition,
       lastStoredPosition = storedPosition.getOrElse(""),
-      sequenceNumber = ChangeStreamEventDeserializer.getCurrentSequenceNumber,
+      binlogClientSequenceNumber = ChangeStreamEventDeserializer.getCurrentSequenceNumber,
       memoryInfo = MemoryInfo(
         Runtime.getRuntime().totalMemory(),
         Runtime.getRuntime().maxMemory(),
@@ -166,7 +166,7 @@ object ControlActor {
                      isConnected: Boolean,
                      binlogClientPosition: String,
                      lastStoredPosition: String,
-                     sequenceNumber: Long,
+                     binlogClientSequenceNumber: Long,
                      memoryInfo: MemoryInfo
                    )
 
