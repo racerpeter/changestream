@@ -4,7 +4,8 @@ import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Failure, Success}
-import akka.actor.{Actor, ActorRef, Cancellable}
+import akka.actor.{Actor, ActorRef, ActorRefFactory, Cancellable}
+import changestream.actors.PositionSaver.EmitterResult
 import changestream.events.MutationWithInfo
 import com.amazonaws.services.sqs.AmazonSQSAsyncClient
 import com.amazonaws.services.sqs.model.SendMessageBatchResult
@@ -20,9 +21,11 @@ object SqsActor {
   case class BatchResult(queued: Seq[String], failed: Seq[String])
 }
 
-class SqsActor(config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
+class SqsActor(getNextHop: ActorRefFactory => ActorRef,
+               config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
   import SqsActor._
 
+  protected val nextHop = getNextHop(context)
   protected val log = LoggerFactory.getLogger(getClass)
   protected implicit val ec = context.dispatcher
 
@@ -31,7 +34,11 @@ class SqsActor(config: Config = ConfigFactory.load().getConfig("changestream")) 
   protected val TIMEOUT = config.getLong("aws.timeout")
 
 
+  // Mutable State!
   protected var cancellableSchedule: Option[Cancellable] = None
+  protected var lastPosition:String = ""
+  // End Mutable State
+
   protected def setDelayedFlush(origSender: ActorRef) = {
     val scheduler = context.system.scheduler
     cancellableSchedule = Some(scheduler.scheduleOnce(MAX_WAIT) { self ! FlushRequest(origSender) })
@@ -72,11 +79,12 @@ class SqsActor(config: Config = ConfigFactory.load().getConfig("changestream")) 
   override def postStop() = cancelDelayedFlush
 
   def receive = {
-    case MutationWithInfo(mutation, _, _, Some(message: String)) =>
+    case MutationWithInfo(_, pos, _, _, Some(message: String)) =>
       log.debug(s"Received message: ${message}")
 
       cancelDelayedFlush
 
+      lastPosition = pos
       messageBuffer += message
       messageBuffer.size match {
         case LIMIT => flush(sender())
@@ -90,6 +98,8 @@ class SqsActor(config: Config = ConfigFactory.load().getConfig("changestream")) 
   protected def flush(origSender: ActorRef) = {
     log.debug(s"Flushing ${messageBuffer.length} messages to SQS.")
 
+    val position = lastPosition
+
     val request = for {
       url <- queueUrl
       req <- client.sendMessageBatch(
@@ -100,11 +110,18 @@ class SqsActor(config: Config = ConfigFactory.load().getConfig("changestream")) 
 
     request onComplete {
       case Success(result) =>
-        log.debug(s"Successfully sent message batch to ${sqsQueue} " +
-          s"(sent: ${result.getSuccessful.size()}, failed: ${result.getFailed.size()})")
-        origSender ! akka.actor.Status.Success(getBatchResult(result))
+        val failed = result.getFailed
+        if(failed.size() > 0) {
+          log.error(s"Some messages failed to enqueue on ${sqsQueue} " +
+            s"(sent: ${result.getSuccessful.size()}, failed: ${failed.size()})")
+        }
+        else {
+          log.debug(s"Successfully sent message batch to ${sqsQueue} " +
+            s"(sent: ${result.getSuccessful.size()}, failed: ${failed.size()})")
+        }
+        nextHop ! EmitterResult(position, Some(getBatchResult(result)))
       case Failure(exception) =>
-        log.error(s"Failed to send message batch to ${sqsQueue}: ${exception.getMessage}")
+        log.error(s"Failed to send message batch to ${sqsQueue}: ${exception.getMessage}", exception)
         throw exception
     }
   }

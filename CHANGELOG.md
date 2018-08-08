@@ -1,5 +1,12 @@
 # Changestream Changelog
 
+## 0.3.0 (2018-08-05)
+
+- Added PositionSaver to persist the last emitted position for graceful restarts
+- Allow starting position to be overridden via an environment variable `OVERRIDE_POSITION`
+- Allow restriction of the captured SQL string length via the `SQL_CHARACTER_LIMIT` environment variable
+
+
 ## 0.2.3 (2017-09-06)
 
 - Optionally read the `changesteam.include-data` setting from the `INCLUDE_DATA` environment variable.

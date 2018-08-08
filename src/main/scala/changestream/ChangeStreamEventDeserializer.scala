@@ -10,7 +10,7 @@ import com.github.shyiko.mysql.binlog.io.ByteArrayInputStream
 import com.typesafe.config.{Config, ConfigFactory}
 
 object ChangestreamEventDeserializerConfig {
-  // TODO refactor this to not be so gross. consider a global config singleton that we can use everywhere
+  // TODO consider a global config singleton that we can use everywhere
   protected var _config:Option[Config] = None
   protected val defaultSqlCharacterLimit = 0 // this default needs to be in sync with the application.conf default
   protected var _sqlCharacterLimit:Int = defaultSqlCharacterLimit
@@ -26,7 +26,7 @@ object ChangestreamEventDeserializerConfig {
   def sqlCharacterLimit = _sqlCharacterLimit
 }
 
-object ChangestreamEventDeserializer extends {
+object ChangeStreamEventDeserializer extends {
   val tableMapData = new util.HashMap[java.lang.Long, TableMapEventData]
   private val _deserializers = new util.IdentityHashMap[EventType, EventDataDeserializer[_ <: EventData]]
   var lastQuery: Option[String] = None
@@ -75,8 +75,8 @@ class InsertDeserializer(
       rows,
       tableMap.get(result.getTableId).getDatabase,
       tableMap.get(result.getTableId).getTable,
-      ChangestreamEventDeserializer.lastQuery,
-      ChangestreamEventDeserializer.getNextSequenceNumber(rows.size)
+      ChangeStreamEventDeserializer.lastQuery,
+      ChangeStreamEventDeserializer.getNextSequenceNumber(rows.size)
     )
   }
 }
@@ -101,8 +101,8 @@ class UpdateDeserializer(
       oldRows,
       tableMap.get(result.getTableId).getDatabase,
       tableMap.get(result.getTableId).getTable,
-      ChangestreamEventDeserializer.lastQuery,
-      ChangestreamEventDeserializer.getNextSequenceNumber(rows.size)
+      ChangeStreamEventDeserializer.lastQuery,
+      ChangeStreamEventDeserializer.getNextSequenceNumber(rows.size)
     )
   }
 }
@@ -124,8 +124,8 @@ class DeleteDeserializer(
       rows,
       tableMap.get(result.getTableId).getDatabase,
       tableMap.get(result.getTableId).getTable,
-      ChangestreamEventDeserializer.lastQuery,
-      ChangestreamEventDeserializer.getNextSequenceNumber(rows.size)
+      ChangeStreamEventDeserializer.lastQuery,
+      ChangeStreamEventDeserializer.getNextSequenceNumber(rows.size)
     )
   }
 }
@@ -141,7 +141,7 @@ object RowsQueryDeserializer extends EventDataDeserializer[EventData] {
     }
     inputStream.skipToTheEndOfTheBlock()
 
-    ChangestreamEventDeserializer.lastQuery = Some(query)
+    ChangeStreamEventDeserializer.lastQuery = Some(query)
 
     null //scalastyle:ignore
   }

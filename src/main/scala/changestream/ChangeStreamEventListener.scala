@@ -1,13 +1,19 @@
 package changestream
 
 import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, Props}
+import akka.util.Timeout
+import changestream.actors.PositionSaver._
 import changestream.actors._
 import changestream.events._
+
+import scala.concurrent.duration._
 import com.github.shyiko.mysql.binlog.event._
 import com.github.shyiko.mysql.binlog.BinaryLogClient.EventListener
 import com.github.shyiko.mysql.binlog.event.EventType._
 import org.slf4j.LoggerFactory
 import com.typesafe.config.Config
+
+import scala.concurrent.Future
 
 object ChangeStreamEventListener extends EventListener {
   protected val log = LoggerFactory.getLogger(getClass)
@@ -17,9 +23,11 @@ object ChangeStreamEventListener extends EventListener {
   protected val whitelist: java.util.List[String] = new java.util.LinkedList[String]()
   protected val blacklist: java.util.List[String] = new java.util.LinkedList[String]()
 
-  @volatile protected var emitterLoader: (ActorRefFactory => ActorRef) = (_ => system.actorOf(Props(new StdoutActor()), name = "emitterActor"))
+  @volatile protected var positionSaver: Option[ActorRef] = None
+  @volatile protected var emitter: Option[ActorRef] = None
+  @volatile protected var currentPosition: Option[String] = None
 
-  protected lazy val formatterActor = system.actorOf(Props(new JsonFormatterActor(emitterLoader)), name = "formatterActor")
+  protected lazy val formatterActor = system.actorOf(Props(new JsonFormatterActor(_ => emitter.get)), name = "formatterActor")
   protected lazy val columnInfoActor = system.actorOf(Props(new ColumnInfoActor(_ => formatterActor)), name = "columnInfoActor")
   protected lazy val transactionActor = system.actorOf(Props(new TransactionActor(_ => columnInfoActor)), name = "transactionActor")
 
@@ -41,31 +49,66 @@ object ChangeStreamEventListener extends EventListener {
       log.info(s"Using event blacklist: ${blacklist}")
     }
 
-    if(config.hasPath("emitter")) {
-      val classString = config.getString("emitter")
-
-      try {
-        val emitterConstructor = Class.forName(classString).asInstanceOf[Class[Actor]].getDeclaredConstructors.head
-        lazy val actorInstance = emitterConstructor.newInstance(config).asInstanceOf[Actor]
-        val actorRef = system.actorOf(Props(actorInstance), name = "emitterActor")
-        setEmitterLoader(_ => {
-          actorRef
-        })
+    if(config.hasPath("position-saver.actor")) {
+      createActor(config.getString("position-saver.actor"), "positionSaverActor", config).
+        foreach(actorRef => setPositionSaver(actorRef))
+    }
+    else {
+      positionSaver = positionSaver match {
+        case None => Some(system.actorOf(Props(new PositionSaver()), name = "positionSaverActor"))
+        case _ => positionSaver
       }
-      catch {
-        case e: ClassNotFoundException =>
-          log.error(s"Couldn't load emitter class ${classString} (ClassNotFoundException), using the default emitter.")
+    }
+
+    if(config.hasPath("emitter")) {
+      val positionSaverLoader: ActorRefFactory => ActorRef = _ => positionSaver.get
+      createActor(config.getString("emitter"), "emitterActor", positionSaverLoader, config).
+        foreach(actorRef => setEmitter(actorRef))
+    }
+    else {
+      emitter = emitter match {
+        case None => Some(system.actorOf(Props(new StdoutActor(_ => positionSaver.get)), name = "emitterActor"))
+        case _ => emitter
       }
     }
   }
 
+  /** Allows the position saver actor to be configured at runtime.
+    *
+    * Note: you must initialize the position saver before the emitter, or it will be ignored
+    *
+    * @param actor your actor ref
+    */
+  def setPositionSaver(actor: ActorRef) = positionSaver = Some(actor)
+
   /** Allows the emitter/producer actor to be configured at runtime.
     *
-    * Note: you must initialize the emitter before the first event arrives, or it will be ignored
+    * Note: you must initialize the emitter before calling setConfig, or it will be ignored
     *
-    * @param loader A lamda that returns your actor ref
+    * @param actor your actor ref
     */
-  def setEmitterLoader(loader: (ActorRefFactory => ActorRef)) = emitterLoader = loader
+  def setEmitter(actor: ActorRef) = emitter = Some(actor)
+
+  def getStoredPosition = askPositionSaver(GetLastSavedPositionRequest)
+  def setPosition(position: Option[String]) = askPositionSaver(SavePositionRequest(position))
+  def persistPosition = askPositionSaver(SaveCurrentPositionRequest)
+
+  protected def askPositionSaver(message: Any): Future[Option[String]] = {
+    import akka.pattern.ask
+    implicit val ec = system.dispatcher
+    implicit val timeout = Timeout(60.seconds)
+
+    positionSaver match {
+      case Some(saver) =>
+        saver.ask(message) map {
+          case GetPositionResponse(maybePosition: Option[String]) =>
+            maybePosition
+        }
+      case None =>
+        log.error("Position saver actor is not initialized!!!!!!!!")
+        throw new Exception("Position saver actor is not initialized!!!!!!!!")
+    }
+  }
 
   /** Sends binlog events to the appropriate changestream actor.
     *
@@ -77,12 +120,27 @@ object ChangeStreamEventListener extends EventListener {
 
     changeEvent match {
       case Some(e: TransactionEvent)  => transactionActor ! e
-      case Some(e: MutationEvent)     => transactionActor ! MutationWithInfo(e)
+      case Some(e: MutationEvent)     =>
+        val nextPosition = getNextPosition(binaryLogEvent.getHeader[EventHeaderV4].getNextPosition)
+        transactionActor ! MutationWithInfo(e, nextPosition)
       case Some(e: AlterTableEvent)   => columnInfoActor ! e
       case None =>
         log.debug(s"Ignoring ${binaryLogEvent.getHeader[EventHeaderV4].getEventType} event.")
     }
   }
+
+  def getNextPosition(eventNextPosition: Long): String = {
+    // TODO make position a case class so we can use position.copy(position = 123) notation
+    currentPosition = eventNextPosition match {
+      case 0L => currentPosition
+      case _ =>
+        val Array(binlogFile, _) = currentPosition.get.split(":")
+        Some(s"${binlogFile}:${eventNextPosition.toString}")
+    }
+    currentPosition.get
+  }
+
+  def getCurrentPosition = currentPosition.getOrElse("")
 
   /** Returns the appropriate ChangeEvent case object given a binlog event object.
     *
@@ -110,9 +168,13 @@ object ChangeStreamEventListener extends EventListener {
         log.info(s"Server version: ${data.getServerVersion}, binlog version: ${data.getBinlogVersion}")
         None
 
+      case ROTATE =>
+        val rotateEvent = event.getData[RotateEventData]
+        currentPosition = Some(s"${rotateEvent.getBinlogFilename}:${rotateEvent.getBinlogPosition}")
+        None
+
       // Known events that are safe to ignore
       case PREVIOUS_GTIDS => None
-      case ROTATE => None
       case ROWS_QUERY => None
       case TABLE_MAP => None
       case ANONYMOUS_GTID => None
@@ -192,6 +254,19 @@ object ChangeStreamEventListener extends EventListener {
     case '`' => escaped.substring(1, escaped.length - 1).replace("``", "`")
     case '"' => escaped.substring(1, escaped.length - 1).replace("\"\"", "\"")
     case _ => escaped
+  }
+
+  private def createActor(classString: String, actorName: String, args: Object*):Option[ActorRef] = {
+    try {
+      val constructor = Class.forName(classString).asInstanceOf[Class[Actor]].getDeclaredConstructors.head
+      lazy val actorInstance = constructor.newInstance(args: _*).asInstanceOf[Actor]
+      Some(system.actorOf(Props(actorInstance), name = actorName))
+    }
+    catch {
+      case e: ClassNotFoundException =>
+        log.error(s"Couldn't load emitter class ${classString} (ClassNotFoundException), using the default emitter.")
+        None
+    }
   }
 
   private def shouldIgnore(info: MutationEvent) = {

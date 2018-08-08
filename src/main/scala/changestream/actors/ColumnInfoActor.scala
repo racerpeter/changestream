@@ -47,6 +47,11 @@ class ColumnInfoActor (
     config.getInt("port"),
     Some(config.getString("password"))
   )
+  // TODO: if we get a ton of events for the same table and database at once, we will exhaust the connection pool
+  // before we resolve the metadata. This can happen when changestream is stopped, then the schema changes, then its restarted
+  // because changestream is unable to get the metadata, and continues to try fetching it
+  // We need to implement some caching of the negative case, and also avoid kicking off multiple queries for the same metdata
+  // at the same time
   private val pool = new ConnectionPool(new MySQLConnectionFactory(mysqlConfig), PoolConfiguration.Default)
 
   // Mutable State
@@ -126,11 +131,14 @@ class ColumnInfoActor (
   protected def requestColumnInfo(schemaSequence: Long, database: String, tableName: String) = {
     getColumnsInfo(schemaSequence, database, tableName) recover {
       case exception =>
+        // this happens when changestream has an error communicating with mysql
         log.error(s"Couldn't fetch column info for ${database}.${tableName}", exception)
         throw exception
     } map {
       case Some(result) => self ! result
-      case None => log.warn(s"No column metadata found for table ${database}.${tableName}")
+      case None =>
+        // this happens when the table and/or datagbase no longer exists when changestream attempts to replay the binlog
+        log.error(s"No column metadata found for table ${database}.${tableName}. It is likely that the database schema has been modified.")
     }
   }
 

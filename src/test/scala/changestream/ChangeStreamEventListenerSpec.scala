@@ -39,8 +39,19 @@ class ChangeStreamEventListenerSpec extends Base with Config {
     }
   }
 
+  "When a custom emitter is specified in the config" should {
+    "use that emitter" in {
+      val emitterConfig = ConfigFactory
+        .parseString("changestream.emitter = \"changestream.actors.StdoutActor\"")
+        .withFallback(testConfig)
+        .getConfig("changestream")
+
+      ChangeStreamEventListener.setConfig(emitterConfig)
+    }
+  }
+
   "When receiving an invalid event" should {
-    "Thow an exception" in {
+    "Throw an exception" in {
       header.setEventType(CREATE_FILE)
       val data = new IntVarEventData()
       val event = new Event(header, data)
@@ -181,17 +192,6 @@ class ChangeStreamEventListenerSpec extends Base with Config {
 
         getTypedEvent[Insert](event) should be(None)
       })
-    }
-  }
-
-  "When a custom emitter is specified in the config" should {
-    "use that emitter" in {
-      val emitterConfig = ConfigFactory
-        .parseString("changestream.emitter = \"changestream.actors.StdoutActor\"")
-        .withFallback(testConfig)
-        .getConfig("changestream")
-
-      ChangeStreamEventListener.setConfig(emitterConfig)
     }
   }
 

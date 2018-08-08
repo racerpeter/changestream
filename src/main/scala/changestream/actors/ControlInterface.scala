@@ -5,12 +5,13 @@ import spray.httpx.SprayJsonSupport._
 import spray.routing._
 import akka.actor._
 import ch.qos.logback.classic.Level
-import changestream.{ChangeStream, ChangestreamEventDeserializer}
+import changestream.{ChangeStream, ChangeStreamEventListener, ChangeStreamEventDeserializer}
 import org.slf4j.LoggerFactory
 import ch.qos.logback.classic.Logger
 import spray.routing.HttpService
 import spray.json.DefaultJsonProtocol
 
+import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
@@ -25,7 +26,7 @@ trait ControlInterface extends HttpService with DefaultJsonProtocol {
   protected val log = LoggerFactory.getLogger(getClass)
 
   implicit val memoryInfoFormat = jsonFormat3(MemoryInfo)
-  implicit val statusFormat = jsonFormat6(Status)
+  implicit val statusFormat = jsonFormat7(Status)
   implicit val successFormat = jsonFormat1(Success)
   implicit val errorFormat = jsonFormat1(Error)
   implicit val logLevelFormat = jsonFormat1(LogLevel)
@@ -140,13 +141,16 @@ trait ControlInterface extends HttpService with DefaultJsonProtocol {
   }
 
   def getStatus = {
+    val storedPosition = Await.result(ChangeStreamEventListener.getStoredPosition, 60 seconds)
+
     Status(
-      ChangeStream.serverName,
-      ChangeStream.clientId,
-      ChangeStream.isConnected,
-      ChangeStream.currentPosition,
-      ChangestreamEventDeserializer.getCurrentSequenceNumber,
-      MemoryInfo(
+      server = ChangeStream.serverName,
+      clientId = ChangeStream.clientId,
+      isConnected = ChangeStream.isConnected,
+      binlogClientPosition = ChangeStreamEventListener.getCurrentPosition,
+      lastStoredPosition = storedPosition.getOrElse(""),
+      binlogClientSequenceNumber = ChangeStreamEventDeserializer.getCurrentSequenceNumber,
+      memoryInfo = MemoryInfo(
         Runtime.getRuntime().totalMemory(),
         Runtime.getRuntime().maxMemory(),
         Runtime.getRuntime().freeMemory()
@@ -160,8 +164,9 @@ object ControlActor {
                      server: String,
                      clientId: Long,
                      isConnected: Boolean,
-                     binlogPosition: String,
-                     sequenceNumber: Long,
+                     binlogClientPosition: String,
+                     lastStoredPosition: String,
+                     binlogClientSequenceNumber: Long,
                      memoryInfo: MemoryInfo
                    )
 

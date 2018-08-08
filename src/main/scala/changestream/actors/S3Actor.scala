@@ -6,7 +6,8 @@ import java.nio.charset.StandardCharsets
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Failure, Success}
-import akka.actor.{Actor, ActorRef, Cancellable}
+import akka.actor.{Actor, ActorRef, ActorRefFactory, Cancellable}
+import changestream.actors.PositionSaver.EmitterResult
 import changestream.events.MutationWithInfo
 import com.amazonaws.ClientConfiguration
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain
@@ -23,9 +24,11 @@ object S3Actor {
   case class FlushRequest(origSender: ActorRef)
 }
 
-class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
+class S3Actor(getNextHop: ActorRefFactory => ActorRef,
+              config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
   import S3Actor.FlushRequest
 
+  protected val nextHop = getNextHop(context)
   protected val log = LoggerFactory.getLogger(getClass)
   protected implicit val ec = context.dispatcher
 
@@ -55,6 +58,7 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
   )
 
   // Mutable State!!
+  protected var lastPosition = ""
   protected var currentBatchSize = 0
   protected var bufferFile: File = getNextFile
   protected var bufferWriter: BufferedWriter = getWriterForFile
@@ -63,12 +67,12 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
   // Wrap the Java IO
   protected def getNextFile = BUFFER_TEMP_DIR match {
     case "" =>
-      File.createTempFile("-buffer", ".json")
+      File.createTempFile("buffer-", ".json")
     case _ if bufferDirectory.exists && bufferDirectory.canWrite =>
-      File.createTempFile("-buffer", ".json", bufferDirectory)
+      File.createTempFile("buffer-", ".json", bufferDirectory)
     case _ =>
       log.error(s"Failed to write to buffer directory ${bufferDirectory}, make sure it exists and is writeable. Using the system default temp dir instead.")
-      File.createTempFile("-buffer", ".json")
+      File.createTempFile("buffer-", ".json")
   }
   protected def getWriterForFile = {
     val streamWriter = new OutputStreamWriter(new FileOutputStream(bufferFile), StandardCharsets.UTF_8)
@@ -138,11 +142,12 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
   }
 
   def receive = {
-    case MutationWithInfo(mutation, _, _, Some(message: String)) =>
+    case MutationWithInfo(mutation, pos, _, _, Some(message: String)) =>
       log.debug(s"Received message: ${message}")
 
       cancelDelayedFlush
 
+      lastPosition = pos
       bufferMessage(message)
       currentBatchSize match {
         case BATCH_SIZE => flush(sender())
@@ -155,6 +160,8 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
 
   protected def flush(origSender: ActorRef) = {
     log.debug(s"Flushing ${currentBatchSize} messages to S3.")
+
+    val position = lastPosition
 
     val batchSize = currentBatchSize
     val now = DateTime.now
@@ -169,7 +176,7 @@ class S3Actor(config: Config = ConfigFactory.load().getConfig("changestream")) e
       case Success(result: PutObjectResult) =>
         log.info(s"Successfully saved ${batchSize} messages (${file.length} bytes) to ${s3Url}.")
         file.delete()
-        origSender ! akka.actor.Status.Success(s3Url)
+        nextHop ! EmitterResult(position, Some(s3Url))
       case Failure(exception) =>
         log.error(s"Failed to save ${batchSize} messages from ${file.getName} (${file.length} bytes) to ${s3Url}: ${exception.getMessage}")
         throw exception

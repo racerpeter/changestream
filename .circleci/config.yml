@@ -1,5 +1,5 @@
 defaults: &defaults
-  parallel: 1
+  parallelism: 1
   resource_class: large
   working_directory: /root/current
   docker:
@@ -80,6 +80,7 @@ jobs:
       - run:
           name: Integration Tests
           command: |
+            sleep 5 # allow mysql to spin up
             sbt it:test
       - store_test_results:
           path: /root/current/target/test-reports
@@ -100,6 +101,7 @@ jobs:
       - run:
           name: Integration Tests
           command: |
+            sleep 5 # allow mysql to spin up
             sbt it:test
       - store_test_results:
           path: /root/current/target/test-reports
