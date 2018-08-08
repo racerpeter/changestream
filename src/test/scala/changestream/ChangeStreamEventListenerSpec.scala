@@ -274,12 +274,13 @@ class ChangeStreamEventListenerSpec extends Base with Config {
   "When receiving a XID event" should {
     "Emit a TransactionEvent(CommitTransaction..)" in {
       header.setEventType(XID)
+      header.setNextPosition(42)
       val data = new XidEventData()
       val event = new Event(header, data)
 
       ChangeStreamEventListener.onEvent(event)
 
-      getTypedEvent[TransactionEvent](event) should be(Some(CommitTransaction))
+      getTypedEvent[TransactionEvent](event) should be(Some(CommitTransaction(42)))
     }
   }
 
@@ -294,11 +295,12 @@ class ChangeStreamEventListenerSpec extends Base with Config {
     }
     "Emit a TransactionEvent(CommitTransaction..) for COMMIT query" in {
       header.setEventType(QUERY)
+      header.setNextPosition(42)
       val data = new QueryEventData()
       data.setSql("COMMIT")
       val event = new Event(header, data)
 
-      getTypedEvent[TransactionEvent](event) should be(Some(CommitTransaction))
+      getTypedEvent[TransactionEvent](event) should be(Some(CommitTransaction(42)))
     }
     "Emit a TransactionEvent(RollbackTransaction..) for ROLLBACK query" in {
       header.setEventType(QUERY)

@@ -320,7 +320,6 @@ class ChangeStreamISpec extends Database with Config {
       queryAndWait(DELETE) // should persist because it is the second event processed by the saver
       queryAndWait(INSERT) // should not immediately persist
 
-      expectMutation.mutation shouldBe a[Insert] // TODO: this is unfortunate... because we are now essentially saving the "last safe position" we are guaranteed to replay events when we shut down un-gracefully
       expectMutation.mutation shouldBe a[Update]
       expectMutation.mutation shouldBe a[Delete]
 

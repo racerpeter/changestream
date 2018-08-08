@@ -149,7 +149,7 @@ object ChangeStreamEventListener extends EventListener {
     */
   def getChangeEvent(event: Event): Option[ChangeEvent] = {
     val header = event.getHeader[EventHeaderV4]
-    log.info(s"Got event of type ${header.getEventType} with ${header.getNextPosition}")
+    log.debug(s"Got event of type ${header.getEventType} with ${header.getNextPosition}")
 
     header.getEventType match {
       case eventType if EventType.isRowMutation(eventType) =>
@@ -160,10 +160,10 @@ object ChangeStreamEventListener extends EventListener {
 
       case XID =>
         currentRowsQueryPosition = None
-        Some(CommitTransaction)
+        Some(CommitTransaction(header.getNextPosition))
 
       case QUERY =>
-        parseQueryEvent(event.getData[QueryEventData])
+        parseQueryEvent(event.getData[QueryEventData], header)
 
       case FORMAT_DESCRIPTION =>
         val data = event.getData[FormatDescriptionEventData]
@@ -224,13 +224,13 @@ object ChangeStreamEventListener extends EventListener {
     * @param queryData The QUERY event data
     * @return
     */
-  protected def parseQueryEvent(queryData: QueryEventData): Option[ChangeEvent] = {
+  protected def parseQueryEvent(queryData: QueryEventData, header: EventHeaderV4): Option[ChangeEvent] = {
     queryData.getSql match {
       case sql if sql matches "(?i)^begin" =>
         Some(BeginTransaction)
 
       case sql if sql matches "(?i)^commit" =>
-        Some(CommitTransaction)
+        Some(CommitTransaction(header.getNextPosition))
 
       case sql if sql matches "(?i)^rollback" =>
         Some(RollbackTransaction)
