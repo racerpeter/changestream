@@ -2,7 +2,7 @@ package changestream
 
 import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, Props}
 import akka.util.Timeout
-import changestream.actors.PositionSaver.{GetPositionRequest, GetPositionResponse, SaveCurrentPositionRequest, SavePositionRequest}
+import changestream.actors.PositionSaver._
 import changestream.actors._
 import changestream.events._
 
@@ -25,8 +25,9 @@ object ChangeStreamEventListener extends EventListener {
 
   @volatile protected var positionSaver: Option[ActorRef] = None
   @volatile protected var emitter: Option[ActorRef] = None
+  @volatile protected var lastSeenPosition: Option[String] = None
 
-  protected lazy val formatterActor = system.actorOf(Props(new JsonFormatterActor(getEmitterLoader)), name = "formatterActor")
+  protected lazy val formatterActor = system.actorOf(Props(new JsonFormatterActor(_ => emitter.get)), name = "formatterActor")
   protected lazy val columnInfoActor = system.actorOf(Props(new ColumnInfoActor(_ => formatterActor)), name = "columnInfoActor")
   protected lazy val transactionActor = system.actorOf(Props(new TransactionActor(_ => columnInfoActor)), name = "transactionActor")
 
@@ -52,21 +53,24 @@ object ChangeStreamEventListener extends EventListener {
       createActor(config.getString("position-saver.actor"), "positionSaverActor", config).
         foreach(actorRef => setPositionSaver(actorRef))
     }
+    else {
+      positionSaver = positionSaver match {
+        case None => Some(system.actorOf(Props(new PositionSaver()), name = "positionSaverActor"))
+        case _ => positionSaver
+      }
+    }
 
     if(config.hasPath("emitter")) {
-      createActor(config.getString("emitter"), "emitterActor", getPositionSaverLoader, config).
+      val positionSaverLoader: ActorRefFactory => ActorRef = _ => positionSaver.get
+      createActor(config.getString("emitter"), "emitterActor", positionSaverLoader, config).
         foreach(actorRef => setEmitter(actorRef))
     }
-  }
-
-  protected def getEmitterLoader: (ActorRefFactory => ActorRef) = _ => emitter match {
-    case None => system.actorOf(Props(new StdoutActor(getPositionSaverLoader)), name = "emitterActor")
-    case Some(emitter) => emitter
-  }
-
-  protected def getPositionSaverLoader: (ActorRefFactory => ActorRef) = _ => positionSaver match {
-    case None => system.actorOf(Props(new PositionSaver()), name = "positionSaverActor")
-    case Some(saver) => saver
+    else {
+      emitter = emitter match {
+        case None => Some(system.actorOf(Props(new StdoutActor(_ => positionSaver.get)), name = "emitterActor"))
+        case _ => emitter
+      }
+    }
   }
 
   /** Allows the position saver actor to be configured at runtime.
@@ -79,13 +83,13 @@ object ChangeStreamEventListener extends EventListener {
 
   /** Allows the emitter/producer actor to be configured at runtime.
     *
-    * Note: you must initialize the emitter before the first event arrives, or it will be ignored
+    * Note: you must initialize the emitter before calling setConfig, or it will be ignored
     *
     * @param actor your actor ref
     */
   def setEmitter(actor: ActorRef) = emitter = Some(actor)
 
-  def getStoredPosition = askPositionSaver(GetPositionRequest)
+  def getStoredPosition = askPositionSaver(GetLastSavedPositionRequest)
   def setPosition(position: Option[String]) = askPositionSaver(SavePositionRequest(position))
   def persistPosition = askPositionSaver(SaveCurrentPositionRequest)
 
@@ -117,12 +121,8 @@ object ChangeStreamEventListener extends EventListener {
     changeEvent match {
       case Some(e: TransactionEvent)  => transactionActor ! e
       case Some(e: MutationEvent)     =>
-        transactionActor ! MutationWithInfo(
-          e,
-          getNextPosition(
-            binaryLogEvent.getHeader[EventHeaderV4].getNextPosition
-          )
-        )
+        val nextPosition = getNextPosition(binaryLogEvent.getHeader[EventHeaderV4].getNextPosition)
+        transactionActor ! MutationWithInfo(e, nextPosition)
       case Some(e: AlterTableEvent)   => columnInfoActor ! e
       case None =>
         log.debug(s"Ignoring ${binaryLogEvent.getHeader[EventHeaderV4].getEventType} event.")
@@ -130,11 +130,17 @@ object ChangeStreamEventListener extends EventListener {
   }
 
   def getNextPosition(eventNextPosition: Long): String = {
-    ChangeStream.currentBinlogFilename + ":" + (eventNextPosition match {
-      case 0L => ChangeStream.currentBinlogPosition.toString // if nextposition is 0, save the current position
-      case _ => eventNextPosition.toString // otherwise, save the next position (i.e. advance to the next change)
-    })
+    // TODO make position a case class so we can use position.copy(position = 123) notation
+    lastSeenPosition = eventNextPosition match {
+      case 0L => lastSeenPosition
+      case _ =>
+        val Array(binlogFile, _) = lastSeenPosition.get.split(":")
+        Some(s"${binlogFile}:${eventNextPosition.toString}")
+    }
+    lastSeenPosition.get
   }
+
+  def getLastSeenPosition = lastSeenPosition.getOrElse("")
 
   /** Returns the appropriate ChangeEvent case object given a binlog event object.
     *
@@ -162,9 +168,13 @@ object ChangeStreamEventListener extends EventListener {
         log.info(s"Server version: ${data.getServerVersion}, binlog version: ${data.getBinlogVersion}")
         None
 
+      case ROTATE =>
+        val rotateEvent = event.getData[RotateEventData]
+        lastSeenPosition = Some(s"${rotateEvent.getBinlogFilename}:${rotateEvent.getBinlogPosition}")
+        None
+
       // Known events that are safe to ignore
       case PREVIOUS_GTIDS => None
-      case ROTATE => None
       case ROWS_QUERY => None
       case TABLE_MAP => None
       case ANONYMOUS_GTID => None

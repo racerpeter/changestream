@@ -144,13 +144,13 @@ trait ControlInterface extends HttpService with DefaultJsonProtocol {
     val storedPosition = Await.result(ChangeStreamEventListener.getStoredPosition, 60 seconds)
 
     Status(
-      ChangeStream.serverName,
-      ChangeStream.clientId,
-      ChangeStream.isConnected,
-      s"${ChangeStream.currentBinlogFilename}:${ChangeStream.currentBinlogPosition}",
-      storedPosition.getOrElse(""),
-      ChangeStreamEventDeserializer.getCurrentSequenceNumber,
-      MemoryInfo(
+      server = ChangeStream.serverName,
+      clientId = ChangeStream.clientId,
+      isConnected = ChangeStream.isConnected,
+      binlogClientPosition = ChangeStreamEventListener.getLastSeenPosition,
+      lastStoredPosition = storedPosition.getOrElse(""),
+      sequenceNumber = ChangeStreamEventDeserializer.getCurrentSequenceNumber,
+      memoryInfo = MemoryInfo(
         Runtime.getRuntime().totalMemory(),
         Runtime.getRuntime().maxMemory(),
         Runtime.getRuntime().freeMemory()
@@ -165,7 +165,7 @@ object ControlActor {
                      clientId: Long,
                      isConnected: Boolean,
                      binlogClientPosition: String,
-                     binlogLastStoredPosition: String,
+                     lastStoredPosition: String,
                      sequenceNumber: Long,
                      memoryInfo: MemoryInfo
                    )
