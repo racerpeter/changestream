@@ -25,7 +25,9 @@ object ChangeStreamEventListener extends EventListener {
 
   @volatile protected var positionSaver: Option[ActorRef] = None
   @volatile protected var emitter: Option[ActorRef] = None
-  @volatile protected var currentPosition: Option[String] = None
+  @volatile protected var currentBinlogFile: Option[String] = None
+  @volatile protected var currentRowsQueryPosition: Option[Long] = None
+  @volatile protected var currentTableMapPosition: Option[Long] = None
 
   protected lazy val formatterActor = system.actorOf(Props(new JsonFormatterActor(_ => emitter.get)), name = "formatterActor")
   protected lazy val columnInfoActor = system.actorOf(Props(new ColumnInfoActor(_ => formatterActor)), name = "columnInfoActor")
@@ -121,7 +123,7 @@ object ChangeStreamEventListener extends EventListener {
     changeEvent match {
       case Some(e: TransactionEvent)  => transactionActor ! e
       case Some(e: MutationEvent)     =>
-        val nextPosition = getNextPosition(binaryLogEvent.getHeader[EventHeaderV4].getNextPosition)
+        val nextPosition = getNextPosition
         transactionActor ! MutationWithInfo(e, nextPosition)
       case Some(e: AlterTableEvent)   => columnInfoActor ! e
       case None =>
@@ -129,18 +131,16 @@ object ChangeStreamEventListener extends EventListener {
     }
   }
 
-  def getNextPosition(eventNextPosition: Long): String = {
+  def getNextPosition: String = {
     // TODO make position a case class so we can use position.copy(position = 123) notation
-    currentPosition = eventNextPosition match {
-      case 0L => currentPosition
-      case _ =>
-        val Array(binlogFile, _) = currentPosition.get.split(":")
-        Some(s"${binlogFile}:${eventNextPosition.toString}")
-    }
-    currentPosition.get
+    val safePosition = currentRowsQueryPosition.getOrElse(currentTableMapPosition.get)
+    s"${currentBinlogFile.get}:${safePosition.toString}"
   }
 
-  def getCurrentPosition = currentPosition.getOrElse("")
+  def getCurrentPosition = {
+    val safePosition = currentRowsQueryPosition.getOrElse(currentTableMapPosition.getOrElse(0L))
+    s"${currentBinlogFile.getOrElse("<not started>")}:${safePosition.toString}"
+  }
 
   /** Returns the appropriate ChangeEvent case object given a binlog event object.
     *
@@ -149,6 +149,7 @@ object ChangeStreamEventListener extends EventListener {
     */
   def getChangeEvent(event: Event): Option[ChangeEvent] = {
     val header = event.getHeader[EventHeaderV4]
+    log.debug(s"Got event of type ${header.getEventType} with ${header.getNextPosition}")
 
     header.getEventType match {
       case eventType if EventType.isRowMutation(eventType) =>
@@ -158,10 +159,11 @@ object ChangeStreamEventListener extends EventListener {
         Some(Gtid(event.getData[GtidEventData].getGtid))
 
       case XID =>
-        Some(CommitTransaction)
+        currentRowsQueryPosition = None
+        Some(CommitTransaction(header.getNextPosition))
 
       case QUERY =>
-        parseQueryEvent(event.getData[QueryEventData])
+        parseQueryEvent(event.getData[QueryEventData], header)
 
       case FORMAT_DESCRIPTION =>
         val data = event.getData[FormatDescriptionEventData]
@@ -170,13 +172,21 @@ object ChangeStreamEventListener extends EventListener {
 
       case ROTATE =>
         val rotateEvent = event.getData[RotateEventData]
-        currentPosition = Some(s"${rotateEvent.getBinlogFilename}:${rotateEvent.getBinlogPosition}")
+        currentBinlogFile = Some(rotateEvent.getBinlogFilename)
+        currentRowsQueryPosition = None
+        currentTableMapPosition = Some(header.getPosition)
+        None
+
+      case TABLE_MAP =>
+        currentTableMapPosition = Some(header.getPosition)
+        None
+
+      case ROWS_QUERY =>
+        currentRowsQueryPosition = Some(header.getPosition)
         None
 
       // Known events that are safe to ignore
       case PREVIOUS_GTIDS => None
-      case ROWS_QUERY => None
-      case TABLE_MAP => None
       case ANONYMOUS_GTID => None
       case STOP => None
 
@@ -214,13 +224,13 @@ object ChangeStreamEventListener extends EventListener {
     * @param queryData The QUERY event data
     * @return
     */
-  protected def parseQueryEvent(queryData: QueryEventData): Option[ChangeEvent] = {
+  protected def parseQueryEvent(queryData: QueryEventData, header: EventHeaderV4): Option[ChangeEvent] = {
     queryData.getSql match {
       case sql if sql matches "(?i)^begin" =>
         Some(BeginTransaction)
 
       case sql if sql matches "(?i)^commit" =>
-        Some(CommitTransaction)
+        Some(CommitTransaction(header.getNextPosition))
 
       case sql if sql matches "(?i)^rollback" =>
         Some(RollbackTransaction)

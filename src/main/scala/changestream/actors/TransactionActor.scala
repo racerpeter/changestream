@@ -48,8 +48,24 @@ class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
           mutationCount += event.mutation.rows.length
       }
 
-    case _: TransactionEvent =>
-      log.debug(s"Received Commit/Rollback")
+    case CommitTransaction(position) =>
+      log.debug(s"Received Commit")
+      previousMutation.foreach { mutation =>
+        log.debug(s"Adding transaction info and forwarding to the ${nextHop.path.name} actor")
+        nextHop ! mutation.copy(
+          transaction = mutation.transaction.map { txInfo =>
+            txInfo.copy(lastMutationInTransaction = true)
+          },
+          // TODO: this is unfortunate... because we are now essentially saving the "last safe position" we are guaranteed to replay events when we shut down un-gracefully
+          nextPosition = mutation.nextPosition.split(":")(0) + ":" + position.toString
+        )
+      }
+      mutationCount = 1
+      currentGtid = None
+      previousMutation = None
+
+    case RollbackTransaction =>
+      log.debug(s"Received Rollback")
       previousMutation.foreach { mutation =>
         log.debug(s"Adding transaction info and forwarding to the ${nextHop.path.name} actor")
         nextHop ! mutation.copy(

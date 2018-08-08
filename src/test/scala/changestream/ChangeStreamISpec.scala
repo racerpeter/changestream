@@ -2,7 +2,7 @@ package changestream
 
 import java.io.File
 
-import akka.actor.{CoordinatedShutdown, Props}
+import akka.actor.{Props}
 import akka.testkit.TestProbe
 import changestream.actors.PositionSaver._
 import changestream.actors.{PositionSaver, StdoutActor}

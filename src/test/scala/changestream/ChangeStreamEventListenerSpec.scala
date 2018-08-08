@@ -2,6 +2,8 @@ package changestream
 
 import java.util
 
+import akka.actor.ActorRefFactory
+import akka.testkit.TestProbe
 import changestream.events._
 import changestream.helpers.{Base, Config}
 import com.github.shyiko.mysql.binlog.event.EventType._
@@ -17,6 +19,9 @@ class ChangeStreamEventListenerSpec extends Base with Config {
   }
 
   val header = new EventHeaderV4()
+
+  val probe = TestProbe()
+  ChangeStreamEventListener.setEmitter(probe.ref)
 
   "ChangeStreamEventListener" should {
     "Should not crash when receiving a ROTATE event" in {
@@ -47,6 +52,77 @@ class ChangeStreamEventListenerSpec extends Base with Config {
         .getConfig("changestream")
 
       ChangeStreamEventListener.setConfig(emitterConfig)
+    }
+  }
+
+  "When keeping track of safe positions" should {
+    "treat rows query as safe when rows query is present" in {
+      header.setEventType(ROTATE)
+      header.setNextPosition(1)
+      val rotateData = new RotateEventData()
+      rotateData.setBinlogFilename("foo")
+      rotateData.setBinlogPosition(1)
+      val rotate = new Event(header, rotateData)
+      ChangeStreamEventListener.onEvent(rotate)
+
+      header.setEventType(ROWS_QUERY)
+      header.setNextPosition(2)
+      val data = new IntVarEventData()
+      val rows_query = new Event(header, data)
+      ChangeStreamEventListener.onEvent(rows_query)
+
+      header.setEventType(TABLE_MAP)
+      header.setNextPosition(3)
+      val table_map = new Event(header, data)
+      ChangeStreamEventListener.onEvent(table_map)
+
+      ChangeStreamEventListener.getNextPosition should be("foo:2")
+    }
+
+    "treat table map as safe when rows query is not present" in {
+      header.setEventType(ROTATE)
+      header.setNextPosition(1)
+      val rotateData = new RotateEventData()
+      rotateData.setBinlogFilename("foo")
+      rotateData.setBinlogPosition(1)
+      val rotate = new Event(header, rotateData)
+      ChangeStreamEventListener.onEvent(rotate)
+
+      header.setEventType(TABLE_MAP)
+      header.setNextPosition(3)
+      val data = new IntVarEventData()
+      val table_map = new Event(header, data)
+      ChangeStreamEventListener.onEvent(table_map)
+
+      ChangeStreamEventListener.getNextPosition should be("foo:3")
+    }
+
+    "rows query position is cleared out after XID event is received" in {
+      header.setEventType(ROTATE)
+      header.setNextPosition(1)
+      val rotateData = new RotateEventData()
+      rotateData.setBinlogFilename("foo")
+      rotateData.setBinlogPosition(1)
+      val rotate = new Event(header, rotateData)
+      ChangeStreamEventListener.onEvent(rotate)
+
+      header.setEventType(ROWS_QUERY)
+      header.setNextPosition(2)
+      val data = new IntVarEventData()
+      val rows_query = new Event(header, data)
+      ChangeStreamEventListener.onEvent(rows_query)
+
+      header.setEventType(TABLE_MAP)
+      header.setNextPosition(3)
+      val table_map = new Event(header, data)
+      ChangeStreamEventListener.onEvent(table_map)
+
+      header.setEventType(XID)
+      header.setNextPosition(4)
+      val xid = new Event(header, data)
+      ChangeStreamEventListener.onEvent(xid)
+
+      ChangeStreamEventListener.getNextPosition should be("foo:3")
     }
   }
 
@@ -198,12 +274,13 @@ class ChangeStreamEventListenerSpec extends Base with Config {
   "When receiving a XID event" should {
     "Emit a TransactionEvent(CommitTransaction..)" in {
       header.setEventType(XID)
+      header.setNextPosition(42)
       val data = new XidEventData()
       val event = new Event(header, data)
 
       ChangeStreamEventListener.onEvent(event)
 
-      getTypedEvent[TransactionEvent](event) should be(Some(CommitTransaction))
+      getTypedEvent[TransactionEvent](event) should be(Some(CommitTransaction(42)))
     }
   }
 
@@ -218,11 +295,12 @@ class ChangeStreamEventListenerSpec extends Base with Config {
     }
     "Emit a TransactionEvent(CommitTransaction..) for COMMIT query" in {
       header.setEventType(QUERY)
+      header.setNextPosition(42)
       val data = new QueryEventData()
       data.setSql("COMMIT")
       val event = new Event(header, data)
 
-      getTypedEvent[TransactionEvent](event) should be(Some(CommitTransaction))
+      getTypedEvent[TransactionEvent](event) should be(Some(CommitTransaction(42)))
     }
     "Emit a TransactionEvent(RollbackTransaction..) for ROLLBACK query" in {
       header.setEventType(QUERY)
