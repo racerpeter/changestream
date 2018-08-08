@@ -23,11 +23,11 @@ object ChangeStreamEventListener extends EventListener {
   protected val whitelist: java.util.List[String] = new java.util.LinkedList[String]()
   protected val blacklist: java.util.List[String] = new java.util.LinkedList[String]()
 
-  @volatile protected var positionSaver: Option[ActorRef] = None
-  @volatile protected var emitter: Option[ActorRef] = None
+  @volatile protected var positionSaverLoader: Option[Any => ActorRef] = None
+  @volatile protected var emitterLoader: Option[Any => ActorRef] = None
   @volatile protected var currentPosition: Option[String] = None
 
-  protected lazy val formatterActor = system.actorOf(Props(new JsonFormatterActor(_ => emitter.get)), name = "formatterActor")
+  protected lazy val formatterActor = system.actorOf(Props(new JsonFormatterActor(emitterLoader.get)), name = "formatterActor")
   protected lazy val columnInfoActor = system.actorOf(Props(new ColumnInfoActor(_ => formatterActor)), name = "columnInfoActor")
   protected lazy val transactionActor = system.actorOf(Props(new TransactionActor(_ => columnInfoActor)), name = "transactionActor")
 
@@ -54,21 +54,20 @@ object ChangeStreamEventListener extends EventListener {
         foreach(actorRef => setPositionSaver(actorRef))
     }
     else {
-      positionSaver = positionSaver match {
-        case None => Some(system.actorOf(Props(new PositionSaver()), name = "positionSaverActor"))
-        case _ => positionSaver
+      positionSaverLoader = positionSaverLoader match {
+        case None => Some(_ => system.actorOf(Props(new PositionSaver()), name = "positionSaverActor"))
+        case _ => positionSaverLoader
       }
     }
 
     if(config.hasPath("emitter")) {
-      val positionSaverLoader: ActorRefFactory => ActorRef = _ => positionSaver.get
-      createActor(config.getString("emitter"), "emitterActor", positionSaverLoader, config).
+      createActor(config.getString("emitter"), "emitterActor", positionSaverLoader.get, config).
         foreach(actorRef => setEmitter(actorRef))
     }
     else {
-      emitter = emitter match {
-        case None => Some(system.actorOf(Props(new StdoutActor(_ => positionSaver.get)), name = "emitterActor"))
-        case _ => emitter
+      emitterLoader = emitterLoader match {
+        case None => Some(_ => system.actorOf(Props(new StdoutActor(positionSaverLoader.get)), name = "emitterActor"))
+        case _ => emitterLoader
       }
     }
   }
@@ -79,7 +78,7 @@ object ChangeStreamEventListener extends EventListener {
     *
     * @param actor your actor ref
     */
-  def setPositionSaver(actor: ActorRef) = positionSaver = Some(actor)
+  def setPositionSaver(actor: ActorRef) = positionSaverLoader = Some(_ => actor)
 
   /** Allows the emitter/producer actor to be configured at runtime.
     *
@@ -87,7 +86,7 @@ object ChangeStreamEventListener extends EventListener {
     *
     * @param actor your actor ref
     */
-  def setEmitter(actor: ActorRef) = emitter = Some(actor)
+  def setEmitter(actor: ActorRef) = emitterLoader = Some(_ => actor)
 
   def getStoredPosition = askPositionSaver(GetLastSavedPositionRequest)
   def setPosition(position: Option[String]) = askPositionSaver(SavePositionRequest(position))
@@ -98,9 +97,9 @@ object ChangeStreamEventListener extends EventListener {
     implicit val ec = system.dispatcher
     implicit val timeout = Timeout(60.seconds)
 
-    positionSaver match {
+    positionSaverLoader match {
       case Some(saver) =>
-        saver.ask(message) map {
+        saver.apply(None).ask(message) map {
           case GetPositionResponse(maybePosition: Option[String]) =>
             maybePosition
         }
