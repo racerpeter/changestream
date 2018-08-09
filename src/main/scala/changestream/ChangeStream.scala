@@ -56,12 +56,12 @@ object ChangeStream extends App {
     *  - TERM signal
     *  - System reboot/shutdown
     */
-  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceUnbind, "disconnectBinlogClient") { () =>
+  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseBeforeServiceUnbind, "disconnectBinlogClient") { () =>
     log.info("Initiating shutdown...")
 
     Future {
       client.disconnect()
-    }.flatMap(_ => ChangeStreamEventListener.persistPosition).map(_ => Done)
+    }.map(_ => Done)
   }
   CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceStop, "stopControlServer") { () =>
     log.info("Shutting down control server...")
