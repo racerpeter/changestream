@@ -127,7 +127,7 @@ class ChangeStreamEventListenerSpec extends Base with Config {
       ChangeStreamEventListener.getNextPosition should be("foo:3")
     }
 
-    "rows query position is cleared out after XID event is received" in {
+    "rows query and table map positions are replaced with XID nextPosition after XID event is received" in {
       header.setEventType(ROTATE)
       header.setNextPosition(1)
       val rotateData = new RotateEventData()
@@ -152,7 +152,7 @@ class ChangeStreamEventListenerSpec extends Base with Config {
       val xid = new Event(header, data)
       ChangeStreamEventListener.onEvent(xid)
 
-      ChangeStreamEventListener.getNextPosition should be("foo:3")
+      ChangeStreamEventListener.getNextPosition should be("foo:4")
     }
   }
 
