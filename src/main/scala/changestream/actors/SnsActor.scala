@@ -60,7 +60,8 @@ class SnsActor(getNextHop: ActorRefFactory => ActorRef,
 
   def receive = {
     case MutationWithInfo(mutation, pos, _, _, Some(message: String)) =>
-      log.debug(s"Received message: ${message}")
+      log.debug(s"Received message of size ${message.length}")
+      log.trace(s"Received message: ${message}")
 
       val origSender = sender()
       val topic = SnsActor.getTopic(mutation, snsTopic, snsTopicHasVariable)
