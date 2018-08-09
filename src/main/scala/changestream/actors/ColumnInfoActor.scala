@@ -85,10 +85,7 @@ class ColumnInfoActor (
     preLoadColumnData
   }
 
-  override def postStop() = {
-    log.debug("Shutting down the ColumnInfoActor")
-    Await.result(pool.disconnect, TIMEOUT milliseconds)
-  }
+  override def postStop() = Await.result(pool.disconnect, TIMEOUT milliseconds)
 
   def receive = {
     case event: MutationWithInfo =>
