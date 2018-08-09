@@ -78,9 +78,7 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
   }
   override def postStop() = {
     import java.util.concurrent.TimeUnit
-
     cancelDelayedFlush
-
     // attempt graceful shutdown of the internal client
     val executor = client.client.getExecutorService()
     executor.shutdown()
