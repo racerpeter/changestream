@@ -16,17 +16,14 @@ object ChangeStream extends App {
   protected val config = ConfigFactory.load().getConfig("changestream")
   protected val mysqlHost = config.getString("mysql.host")
   protected val mysqlPort = config.getInt("mysql.port")
-  val client = new BinaryLogClient(
+  protected val client = new BinaryLogClient(
     mysqlHost,
     mysqlPort,
     config.getString("mysql.user"),
     config.getString("mysql.password")
   )
 
-  @volatile protected var isPaused = false
-
   /** Every changestream instance must have a unique server-id.
-    *
     * http://dev.mysql.com/doc/refman/5.7/en/replication-setup-slaves.html#replication-howto-slavebaseconfig
     */
   client.setServerId(config.getLong("mysql.server-id"))
@@ -34,16 +31,14 @@ object ChangeStream extends App {
   /** If we lose the connection to the server retry every `changestream.mysql.keepalive` milliseconds. **/
   client.setKeepAliveInterval(config.getLong("mysql.keepalive"))
 
-  /** Register the objects that will receive `onEvent` calls and deserialize data **/
   ChangeStreamEventListener.setConfig(config)
   ChangestreamEventDeserializerConfig.setConfig(config)
+  ChangeStreamEventListener.startControlServer(config)
+
   client.registerEventListener(ChangeStreamEventListener)
   client.setEventDeserializer(ChangeStreamEventDeserializer)
-
-  /** Register the object that will receive BinaryLogClient connection lifecycle events **/
   client.registerLifecycleListener(ChangeStreamLifecycleListener)
 
-  ChangeStreamEventListener.startControlServer(config)
 
   getConnected
 
@@ -51,39 +46,8 @@ object ChangeStream extends App {
   def clientId = client.getServerId
   def isConnected = client.isConnected
 
-  def connect() = {
-    if(!client.isConnected()) {
-      isPaused = false
-      Await.result(getConnected, 60.seconds)
-      true
-    }
-    else {
-      false
-    }
-  }
-
-  def disconnect() = {
-    if(client.isConnected()) {
-      isPaused = true
-      client.disconnect()
-      Await.result(ChangeStreamEventListener.persistPosition, 60.seconds)
-      true
-    }
-    else {
-      false
-    }
-  }
-
-  def reset() = {
-    if(!client.isConnected()) {
-      Await.result(ChangeStreamEventListener.setPosition(None), 5.seconds)
-      getConnected
-      true
-    }
-    else {
-      false
-    }
-  }
+  def getConnectedAndWait = Await.result(getConnected, 60.seconds)
+  def disconnectClient = client.disconnect()
 
   def getConnected = {
     log.info(s"Starting changestream...")
@@ -118,7 +82,7 @@ object ChangeStream extends App {
   }
 
   protected def getInternalClientConnected = {
-    while(!isPaused && !client.isConnected) {
+    while(!client.isConnected) {
       try {
         client.connect(5000)
       }
@@ -127,8 +91,8 @@ object ChangeStream extends App {
           log.error("Failed to connect to MySQL to stream the binlog, retrying in 5 seconds...", e)
           Thread.sleep(5000)
         case e: Exception =>
-          log.error("Failed to connect, exiting.", e)
-          ChangeStreamEventListener.shutdown().map(_ => sys.exit(1))
+          log.error("Failed to connect, exiting...", e)
+          Await.result(ChangeStreamEventListener.shutdownAndExit(1), 60.seconds)
       }
     }
   }

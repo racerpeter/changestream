@@ -83,8 +83,10 @@ trait ControlInterface extends HttpService with DefaultJsonProtocol {
     complete {
       try {
         log.info("Received pause request, pausing...")
-        ChangeStream.disconnect() match {
+        ChangeStream.isConnected match {
           case true =>
+            ChangeStream.disconnectClient
+            Await.result(ChangeStreamEventListener.persistPosition, 60.seconds)
             log.info("Paused.")
             Success("ChangeStream is Paused. `/resume` to pick up where you left off. `/reset` to discard past events and resume in real time.")
           case false =>
@@ -104,10 +106,12 @@ trait ControlInterface extends HttpService with DefaultJsonProtocol {
     complete {
       try {
         log.info("Received reset request, resetting the binlog position...")
-        ChangeStream.reset() match {
-          case true =>
-            Success("ChangeStream has been reset, and will begin streaming events in real time when resumed.")
+        ChangeStream.isConnected match {
           case false =>
+            Await.result(ChangeStreamEventListener.setPosition(None), 5.seconds)
+            Await.result(ChangeStream.getConnected, 60.seconds)
+            Success("ChangeStream has been reset, and will begin streaming events in real time when resumed.")
+          case true =>
             log.warn("Reset failed, perhaps we are not paused?")
             Error("You must pause ChangeStream before resetting.")
         }
@@ -124,10 +128,11 @@ trait ControlInterface extends HttpService with DefaultJsonProtocol {
     complete {
       try {
         log.info("Received resume request, resuming event processing...")
-        ChangeStream.connect() match {
-          case true =>
-            Success("ChangeStream is now connected.")
+        ChangeStream.isConnected match {
           case false =>
+            ChangeStream.getConnectedAndWait
+            Success("ChangeStream is now connected.")
+          case true =>
             log.warn("Resume failed, perhaps we are not paused?")
             Error("ChangeStream is already connected.")
         }

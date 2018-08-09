@@ -17,7 +17,7 @@ object ChangeStreamLifecycleListener extends LifecycleListener {
 
   def onEventDeserializationFailure(client: BinaryLogClient, ex: Exception) = {
     log.error(s"MySQL client failed to deserialize event:\n${ex}\n\n")
-    ChangeStreamEventListener.shutdown()
+    ChangeStreamEventListener.shutdownAndExit(2)
   }
 
   def onCommunicationFailure(client: BinaryLogClient, ex: Exception) = {

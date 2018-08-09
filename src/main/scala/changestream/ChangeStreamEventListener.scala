@@ -1,7 +1,7 @@
 package changestream
 
 import akka.Done
-import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, CoordinatedShutdown, PoisonPill, Props}
+import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, CoordinatedShutdown, Props}
 import akka.io.IO
 import akka.pattern.ask
 import akka.util.Timeout
@@ -49,12 +49,7 @@ object ChangeStreamEventListener extends EventListener {
   CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseBeforeServiceUnbind, "disconnectBinlogClient") { () =>
     log.info("Initiating shutdown...")
 
-    Future { ChangeStream.client.disconnect() }.map(_ => Done)
-  }
-  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceStop, "stopControlServer") { () =>
-    log.info("Shutting down control server...")
-
-    IO(Http).ask(Http.CloseAll).map(_ => Done)
+    Future { ChangeStream.disconnectClient }.map(_ => Done)
   }
 
   CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceUnbind, "drainPipeline") { () =>
@@ -89,9 +84,17 @@ object ChangeStreamEventListener extends EventListener {
     }
   }
 
+  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceStop, "stopControlServer") { () =>
+    log.info("Shutting down control server...")
+
+    IO(Http).ask(Http.CloseAll).map(_ => Done)
+  }
+
   def shutdown() = {
     CoordinatedShutdown(system).run(CoordinatedShutdown.JvmExitReason)
   }
+
+  def shutdownAndExit(code: Int) = shutdown().map(_ => sys.exit(code))
 
   /** Allows the configuration for the listener object to be set on startup.
     * The listener will look for whitelist, blacklist, and emitter settings.

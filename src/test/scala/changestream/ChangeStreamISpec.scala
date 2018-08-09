@@ -236,12 +236,12 @@ class ChangeStreamISpec extends Database with Config {
 
   "when starting up" should {
     "start from 'real time' when there is no last known position" in {
-      ChangeStream.disconnect()
+      ChangeStream.disconnectClient
       Await.result(positionSaver ? SavePositionRequest(None), 1000 milliseconds)
 
       queryAndWait(INSERT)
 
-      ChangeStream.connect()
+      ChangeStream.getConnectedAndWait
       ensureConnected
 
       queryAndWait(UPDATE)
@@ -250,12 +250,12 @@ class ChangeStreamISpec extends Database with Config {
     }
 
     "start reading from the last known position when there is a last known position and no override is passed" in {
-      ChangeStream.disconnect()
+      ChangeStream.disconnectClient
       Await.result(positionSaver ? SavePositionRequest(Some(getLiveBinLogPosition)), 1000 milliseconds)
 
       queryAndWait(INSERT)
 
-      ChangeStream.connect()
+      ChangeStream.getConnectedAndWait
       ensureConnected
 
       queryAndWait(UPDATE)
@@ -265,7 +265,7 @@ class ChangeStreamISpec extends Database with Config {
     }
 
     "start from override when override is passed" in {
-      ChangeStream.disconnect()
+      ChangeStream.disconnectClient
       Await.result(positionSaver ? SavePositionRequest(Some(getLiveBinLogPosition)), 1000 milliseconds)
 
       // this event should be skipped due to the override
@@ -278,7 +278,7 @@ class ChangeStreamISpec extends Database with Config {
       // this event should arrive first
       queryAndWait(UPDATE)
 
-      ChangeStream.connect()
+      ChangeStream.getConnectedAndWait
       ensureConnected
 
       // advance the live position to be "newer" than the override (should arrive second)
@@ -292,12 +292,12 @@ class ChangeStreamISpec extends Database with Config {
     }
 
     "exit gracefully when a TERM signal is received" in {
-      ChangeStream.disconnect()
+      ChangeStream.disconnectClient
       Await.result(positionSaver ? SavePositionRequest(Some(getLiveBinLogPosition)), 1000 milliseconds)
 
       val startingPosition = getStoredBinLogPosition
 
-      ChangeStream.connect()
+      ChangeStream.getConnectedAndWait
       ensureConnected
 
       queryAndWait(INSERT) // should not persist immediately because of the max events = 2
@@ -307,14 +307,14 @@ class ChangeStreamISpec extends Database with Config {
 
       getStoredBinLogPosition should be(startingPosition)
 
-      ChangeStream.disconnect()
+      ChangeStream.disconnectClient
       ensureDisconnected
 
       getStoredBinLogPosition should be(insertMutation.nextPosition)
 
       queryAndWait(UPDATE) // should not immediately persist
 
-      ChangeStream.connect()
+      ChangeStream.getConnectedAndWait
       ensureConnected
 
       queryAndWait(DELETE) // should persist because it is the second event processed by the saver
