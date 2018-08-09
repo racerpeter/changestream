@@ -24,7 +24,6 @@ object ColumnInfoActor {
   val PRELOAD_POSITION = 0
 
   case class PendingMutation(schemaSequence: Long, event: MutationWithInfo)
-  case class ColumnMetadataFailure(database: String, tableName: String)
 }
 
 class ColumnInfoActor (
