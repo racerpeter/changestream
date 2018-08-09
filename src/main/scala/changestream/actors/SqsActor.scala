@@ -123,6 +123,7 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
         if(failed.size() > 0) {
           log.error(s"Some messages failed to enqueue on ${sqsQueue} " +
             s"(sent: ${result.getSuccessful.size()}, failed: ${failed.size()})")
+          // TODO retry N times then exit
         }
         else {
           log.debug(s"Successfully sent message batch to ${sqsQueue} " +
@@ -131,7 +132,7 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
         nextHop ! EmitterResult(position, Some(getBatchResult(result)))
       case Failure(exception) =>
         log.error(s"Failed to send message batch to ${sqsQueue}: ${exception.getMessage}", exception)
-        throw exception
+        throw exception // TODO retry N times then exit
     }
   }
 
