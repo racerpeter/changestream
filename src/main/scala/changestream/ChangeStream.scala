@@ -118,11 +118,9 @@ object ChangeStream extends App {
 
   def reset() = {
     if(!client.isConnected()) {
-      val f = for {
-        _ <- ChangeStreamEventListener.setPosition(None)
-        _ <- getConnected
-      } yield true
-      Await.result(f, 60.seconds)
+      Await.result(ChangeStreamEventListener.setPosition(None), 5.seconds)
+      getConnected
+      true
     }
     else {
       false
