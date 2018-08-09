@@ -87,6 +87,7 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
         case Some(str) => str
       })
       saverWriter.close()
+      log.trace(s"Save success at ${position}")
 
       sender.map(_ ! akka.actor.Status.Success(GetPositionResponse(position)))
     } catch {
@@ -105,7 +106,10 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
     log.info(s"Ready to save positions to file ${SAVER_FILE_PATH} (max-records=${MAX_RECORDS}, max-wait=${MAX_WAIT}).")
   }
 
-  override def postStop() = cancelDelayedSave
+  override def postStop() = {
+    log.info(s"Shutting down PositionSaver and saving current position: ${currentPosition}")
+    writePosition(currentPosition, None)
+  }
 
   def receive = {
     case EmitterResult(position, meta) =>
@@ -127,7 +131,7 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
       writePosition(currentPosition, Some(sender()))
 
     case SaveCurrentPositionRequest =>
-      log.info(s"Saving current position: ${currentPosition}")
+      log.debug(s"Saving current position: ${currentPosition}")
       writePosition(currentPosition, Some(sender()))
 
     case GetPositionRequest =>

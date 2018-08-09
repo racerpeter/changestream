@@ -76,7 +76,17 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
     val url = Await.result(queueUrl, TIMEOUT milliseconds)
     log.info(s"Connected to SQS queue ${sqsQueue} with ARN ${url}")
   }
-  override def postStop() = cancelDelayedFlush
+  override def postStop() = {
+    import java.util.concurrent.TimeUnit
+
+    cancelDelayedFlush
+
+    // attempt graceful shutdown of the internal client
+    val executor = client.client.getExecutorService()
+    executor.shutdown()
+    executor.awaitTermination(60, TimeUnit.SECONDS)
+    client.client.shutdown()
+  }
 
   def receive = {
     case MutationWithInfo(_, pos, _, _, Some(message: String)) =>
