@@ -49,7 +49,8 @@ object ChangeStreamEventListener extends EventListener {
         case None =>
           Future { Done }
         case Some(actor) =>
-          gracefulStop(actor, 60 seconds).map(_ => Done)
+          // stop and wait for futures (i.e. external calls) to complete
+          gracefulStop(actor, 30 seconds).map(_ => Done)
       }
     } yield Done
   }
@@ -62,7 +63,7 @@ object ChangeStreamEventListener extends EventListener {
       case None =>
         Future { Done }
       case Some(actor) =>
-        gracefulStop(actor, 60 seconds).map(_ => Done)
+        gracefulStop(actor, 5 seconds).map(_ => Done)
     }
   }
 
