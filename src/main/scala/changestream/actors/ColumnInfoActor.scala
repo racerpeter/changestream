@@ -53,7 +53,11 @@ class ColumnInfoActor (
   // because changestream is unable to get the metadata, and continues to try fetching it
   // We need to implement some caching of the negative case, and also avoid kicking off multiple queries for the same metdata
   // at the same time
-  private val pool = new ConnectionPool(new MySQLConnectionFactory(mysqlConfig), PoolConfiguration(maxObjects = 10, maxIdle = 4, maxQueueSize = 10000))
+  private val pool = new ConnectionPool(
+    new MySQLConnectionFactory(mysqlConfig),
+    //TODO: lets make this configurable
+    PoolConfiguration(maxObjects = 10, maxIdle = 4, maxQueueSize = 10000)
+  )
 
   // Mutable State
   protected var _schemaSequence = -1
