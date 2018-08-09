@@ -31,15 +31,15 @@ class ChangeStreamISpec extends Database with Config {
   ConfigFactory.invalidateCaches()
 
   // Wire in the probes
-  val positionSaver = system.actorOf(Props(new PositionSaver()), name = "positionSaverActor")
+  lazy val positionSaver = ChangeStreamEventListener.system.actorOf(Props(new PositionSaver()), name = "positionSaverActor")
+  lazy val emitter = ChangeStreamEventListener.system.actorOf(Props(new StdoutActor(_ => positionSaver)), name = "emitterActor")
   val emitterProbe = TestProbe()
-  val emitter = system.actorOf(Props(new StdoutActor(_ => positionSaver)), name = "emitterActor")
 
   // Create the app thread
   val app = new Thread {
     override def run = ChangeStream.main(Array())
     override def interrupt = {
-      Await.result(ChangeStream.shutdown(), 60 seconds)
+      Await.result(ChangeStreamEventListener.shutdown(), 60 seconds)
       super.interrupt
     }
   }
