@@ -309,6 +309,7 @@ class ChangeStreamISpec extends Database with Config {
 
       ChangeStream.disconnectClient
       ensureDisconnected
+      Await.result(ChangeStreamEventListener.persistPosition, 60.seconds)
 
       getStoredBinLogPosition should be(insertMutation.nextPosition)
 
