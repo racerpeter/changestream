@@ -133,11 +133,8 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
 
   override def postStop() = {
     cancelDelayedFlush
-
-    // TODO: this does mean that any in-flight messages would be buffered
     bufferWriter.close()
     bufferFile.delete()
-
     client.shutdown()
   }
 
@@ -180,7 +177,7 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
         nextHop ! EmitterResult(position, Some(s3Url))
       case Failure(exception) =>
         log.error(s"Failed to save ${batchSize} messages from ${file.getName} (${file.length} bytes) to ${s3Url}: ${exception.getMessage}")
-        throw exception
+        throw exception // TODO retry N times then exit
     }
   }
 }

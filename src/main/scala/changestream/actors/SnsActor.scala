@@ -58,12 +58,20 @@ class SnsActor(getNextHop: ActorRefFactory => ActorRef,
     ret
   }
 
+  override def postStop = {
+    import java.util.concurrent.TimeUnit
+    // attempt graceful shutdown
+    val executor = client.client.getExecutorService()
+    executor.shutdown()
+    executor.awaitTermination(60, TimeUnit.SECONDS)
+    client.client.shutdown()
+  }
+
   def receive = {
     case MutationWithInfo(mutation, pos, _, _, Some(message: String)) =>
       log.debug(s"Received message of size ${message.length}")
       log.trace(s"Received message: ${message}")
 
-      val origSender = sender()
       val topic = SnsActor.getTopic(mutation, snsTopic, snsTopicHasVariable)
       val topicArn = topicArns.getOrElse(topic, getOrCreateTopic(topic))
       topicArns.update(topic, topicArn)
@@ -77,6 +85,7 @@ class SnsActor(getNextHop: ActorRefFactory => ActorRef,
         case Failure(exception) =>
           log.error(s"Failed to publish to topic ${topic}: ${exception.getMessage}")
           throw exception
+          // TODO retry N times then exit
       }
   }
 }

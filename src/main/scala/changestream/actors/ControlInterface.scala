@@ -5,9 +5,10 @@ import spray.httpx.SprayJsonSupport._
 import spray.routing._
 import akka.actor._
 import ch.qos.logback.classic.Level
-import changestream.{ChangeStream, ChangeStreamEventListener, ChangeStreamEventDeserializer}
+import changestream.{ChangeStream, ChangeStreamEventDeserializer, ChangeStreamEventListener}
 import org.slf4j.LoggerFactory
 import ch.qos.logback.classic.Logger
+import spray.http.StatusCodes
 import spray.routing.HttpService
 import spray.json.DefaultJsonProtocol
 
@@ -25,12 +26,9 @@ trait ControlInterface extends HttpService with DefaultJsonProtocol {
 
   protected val log = LoggerFactory.getLogger(getClass)
 
+  // yes this is backward on purpose
   implicit val memoryInfoFormat = jsonFormat3(MemoryInfo)
   implicit val statusFormat = jsonFormat7(Status)
-  implicit val successFormat = jsonFormat1(Success)
-  implicit val errorFormat = jsonFormat1(Error)
-  implicit val logLevelFormat = jsonFormat1(LogLevel)
-
   implicit def executionContext = actorRefFactory.dispatcher
   implicit val timeout = Timeout(10 seconds)
 
@@ -41,102 +39,26 @@ trait ControlInterface extends HttpService with DefaultJsonProtocol {
           complete(getStatus)
         }
       } ~
-        path("status") {
-          detach() {
-            complete(getStatus)
-          }
+      path("status") {
+        detach() {
+          complete(getStatus)
         }
-    } ~
-      post {
-        logLevelRoutes ~
-        pauseRoute ~
-        resetRoute ~
-        resumeRoute
-      }
-  }
-
-  def logLevelRoutes: Route = path("log_level") {
-
-    entity(as[LogLevel]) { logLevel =>
-      complete {
-        try {
-          logLevel.level.toLowerCase match {
-            case "all" | "trace" | "debug" | "info" | "warn" | "error" | "off" =>
-              val rootLogger = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME).asInstanceOf[Logger]
-              rootLogger.setLevel(Level.toLevel(logLevel.level))
-              Success(s"ChangeStream logging level has been set to ${logLevel.level}.")
-            case _ =>
-              log.error(s"ControlActor received invalid log level ${logLevel.level}.")
-              Error(s"Invalid log level: ${logLevel.level}")
-          }
-        }
-        catch {
-          case e: Exception =>
-            log.error("Caught an exception trying to set log level.", e)
-            Error(s"ChangeStream has encountered an error: ${e.getMessage}")
-        }
+      } ~
+      path("logs") {
+        parameter('level) { level => setLogLevel(level) }
       }
     }
   }
 
-  def pauseRoute: Route = path("pause") {
-    complete {
-      try {
-        log.info("Received pause request, pausing...")
-        ChangeStream.disconnect() match {
-          case true =>
-            log.info("Paused.")
-            Success("ChangeStream is Paused. `/resume` to pick up where you left off. `/reset` to discard past events and resume in real time.")
-          case false =>
-            log.warn("Pause failed, perhaps we are already paused?")
-            Error("ChangeStream is not connected. `/resume` or `/reset` to connect.")
-        }
-      }
-      catch {
-        case e: Exception =>
-          log.error("Caught an exception trying to pause.", e)
-          Error(s"ChangeStream has encountered an error: ${e.getMessage}")
-      }
-    }
-  }
-
-  def resetRoute: Route = path("reset") {
-    complete {
-      try {
-        log.info("Received reset request, resetting the binlog position...")
-        ChangeStream.reset() match {
-          case true =>
-            Success("ChangeStream has been reset, and will begin streaming events in real time when resumed.")
-          case false =>
-            log.warn("Reset failed, perhaps we are not paused?")
-            Error("You must pause ChangeStream before resetting.")
-        }
-      }
-      catch {
-        case e: Exception =>
-          log.error("Caught an exception trying to reset.", e)
-          Error(s"ChangeStream has encountered an error: ${e.getMessage}")
-      }
-    }
-  }
-
-  def resumeRoute: Route = path("resume") {
-    complete {
-      try {
-        log.info("Received resume request, resuming event processing...")
-        ChangeStream.connect() match {
-          case true =>
-            Success("ChangeStream is now connected.")
-          case false =>
-            log.warn("Resume failed, perhaps we are not paused?")
-            Error("ChangeStream is already connected.")
-        }
-      }
-      catch {
-        case e: Exception =>
-          log.error("Caught an exception trying to resume.", e)
-          Error(s"ChangeStream has encountered an error: ${e.getMessage}")
-      }
+  def setLogLevel(level: String) = {
+    level.toLowerCase match {
+      case "all" | "trace" | "debug" | "info" | "warn" | "error" | "off" =>
+        val rootLogger = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME).asInstanceOf[Logger]
+        rootLogger.setLevel(Level.toLevel(level))
+        complete(s"ChangeStream logging level has been set to ${level}.")
+      case _ =>
+        log.error(s"ControlActor received invalid log level ${level}.")
+        complete(StatusCodes.BadRequest, s"Invalid log level: ${level}")
     }
   }
 
@@ -171,9 +93,4 @@ object ControlActor {
                    )
 
   case class MemoryInfo(heapSize: Long, maxHeap: Long, freeHeap: Long)
-
-  case class LogLevel(level: String)
-
-  case class Success(success: String)
-  case class Error(error: String)
 }

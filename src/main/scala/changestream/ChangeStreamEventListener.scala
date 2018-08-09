@@ -1,23 +1,30 @@
 package changestream
 
-import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, Props}
+import akka.Done
+import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, CoordinatedShutdown, Props}
+import akka.io.IO
+import akka.pattern.ask
 import akka.util.Timeout
 import changestream.actors.PositionSaver._
 import changestream.actors._
 import changestream.events._
 
 import scala.concurrent.duration._
+import scala.language.postfixOps
 import com.github.shyiko.mysql.binlog.event._
 import com.github.shyiko.mysql.binlog.BinaryLogClient.EventListener
 import com.github.shyiko.mysql.binlog.event.EventType._
 import org.slf4j.LoggerFactory
 import com.typesafe.config.Config
+import spray.can.Http
 
 import scala.concurrent.Future
 
 object ChangeStreamEventListener extends EventListener {
   protected val log = LoggerFactory.getLogger(getClass)
-  protected val system = ActorSystem("changestream")
+  implicit val system = ActorSystem("changestream") // public for tests
+  protected implicit val ec = system.dispatcher
+  protected implicit val timeout = Timeout(10 seconds)
 
   protected val systemDatabases = Seq("information_schema", "mysql", "performance_schema", "sys")
   protected val whitelist: java.util.List[String] = new java.util.LinkedList[String]()
@@ -26,12 +33,68 @@ object ChangeStreamEventListener extends EventListener {
   @volatile protected var positionSaver: Option[ActorRef] = None
   @volatile protected var emitter: Option[ActorRef] = None
   @volatile protected var currentBinlogFile: Option[String] = None
+  @volatile protected var currentTransactionPosition: Option[Long] = None
   @volatile protected var currentRowsQueryPosition: Option[Long] = None
   @volatile protected var currentTableMapPosition: Option[Long] = None
 
   protected lazy val formatterActor = system.actorOf(Props(new JsonFormatterActor(_ => emitter.get)), name = "formatterActor")
   protected lazy val columnInfoActor = system.actorOf(Props(new ColumnInfoActor(_ => formatterActor)), name = "columnInfoActor")
   protected lazy val transactionActor = system.actorOf(Props(new TransactionActor(_ => columnInfoActor)), name = "transactionActor")
+
+  /** Gracefully handle application shutdown from
+    *  - Normal program exit
+    *  - TERM signal
+    *  - System reboot/shutdown
+    */
+  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseBeforeServiceUnbind, "disconnectBinlogClient") { () =>
+    log.info("Initiating shutdown...")
+
+    Future { ChangeStream.disconnectClient }.map(_ => Done)
+  }
+
+  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceUnbind, "drainPipeline") { () =>
+    import akka.pattern.gracefulStop
+    log.info("Draining event pipeline...")
+
+    val combinedFuture = for {
+      tR <- gracefulStop(transactionActor, 5 seconds)
+      cR <- gracefulStop(columnInfoActor, 5 seconds)
+      fR <- gracefulStop(formatterActor, 5 seconds)
+      eR <- emitter match {
+        case None =>
+          Future { Done }
+        case Some(actor) =>
+          // stop and wait for futures (i.e. external calls) to complete
+          gracefulStop(actor, 30 seconds)
+      }
+    } yield (tR, cR, fR, eR)
+
+    combinedFuture.map(_ => Done)
+  }
+
+  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "saveLastPosition") { () =>
+    import akka.pattern.gracefulStop
+    log.info("Saving last position...")
+
+    positionSaver match {
+      case None =>
+        Future { Done }
+      case Some(actor) =>
+        gracefulStop(actor, 30 seconds).map(_ => Done)
+    }
+  }
+
+  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceStop, "stopControlServer") { () =>
+    log.info("Shutting down control server...")
+
+    IO(Http).ask(Http.CloseAll).map(_ => Done)
+  }
+
+  def shutdown() = {
+    CoordinatedShutdown(system).run(CoordinatedShutdown.JvmExitReason)
+  }
+
+  def shutdownAndExit(code: Int) = shutdown().map(_ => sys.exit(code))
 
   /** Allows the configuration for the listener object to be set on startup.
     * The listener will look for whitelist, blacklist, and emitter settings.
@@ -72,6 +135,22 @@ object ChangeStreamEventListener extends EventListener {
         case None => Some(system.actorOf(Props(new StdoutActor(_ => positionSaver.get)), name = "emitterActor"))
         case _ => emitter
       }
+    }
+  }
+
+  /** Start the HTTP server for status and control **/
+  def startControlServer(config: Config) = {
+    val controlBind = Http.Bind(
+      listener = system.actorOf(Props[ControlInterfaceActor], "control-interface"),
+      interface = config.getString("control.host"),
+      port = config.getInt("control.port")
+    )
+
+    IO(Http).ask(controlBind).map {
+      case Http.Bound(address) =>
+        log.info(s"Control interface bound to ${address}")
+      case Http.CommandFailed(cmd) =>
+        log.warn(s"Could not bing control interface: ${cmd.failureMessage}")
     }
   }
 
@@ -133,12 +212,12 @@ object ChangeStreamEventListener extends EventListener {
 
   def getNextPosition: String = {
     // TODO make position a case class so we can use position.copy(position = 123) notation
-    val safePosition = currentRowsQueryPosition.getOrElse(currentTableMapPosition.get)
+    val safePosition = currentTransactionPosition.getOrElse(currentRowsQueryPosition.getOrElse(currentTableMapPosition.get))
     s"${currentBinlogFile.get}:${safePosition.toString}"
   }
 
   def getCurrentPosition = {
-    val safePosition = currentRowsQueryPosition.getOrElse(currentTableMapPosition.getOrElse(0L))
+    val safePosition = currentTransactionPosition.getOrElse(currentRowsQueryPosition.getOrElse(currentTableMapPosition.getOrElse(0L)))
     s"${currentBinlogFile.getOrElse("<not started>")}:${safePosition.toString}"
   }
 
@@ -159,11 +238,18 @@ object ChangeStreamEventListener extends EventListener {
         Some(Gtid(event.getData[GtidEventData].getGtid))
 
       case XID =>
+        currentTransactionPosition = None
         currentRowsQueryPosition = None
+        currentTableMapPosition = Some(header.getNextPosition) // use this as a last resort behind the other three
         Some(CommitTransaction(header.getNextPosition))
 
       case QUERY =>
-        parseQueryEvent(event.getData[QueryEventData], header)
+        parseQueryEvent(event.getData[QueryEventData], header) match {
+          case Some(BeginTransaction) =>
+            currentTransactionPosition = Some(header.getPosition)
+            Some(BeginTransaction)
+          case x => x
+        }
 
       case FORMAT_DESCRIPTION =>
         val data = event.getData[FormatDescriptionEventData]
@@ -173,8 +259,9 @@ object ChangeStreamEventListener extends EventListener {
       case ROTATE =>
         val rotateEvent = event.getData[RotateEventData]
         currentBinlogFile = Some(rotateEvent.getBinlogFilename)
+        currentTransactionPosition = None
         currentRowsQueryPosition = None
-        currentTableMapPosition = Some(header.getPosition)
+        currentTableMapPosition = Some(header.getPosition) // use this as a last resort behind the other three
         None
 
       case TABLE_MAP =>

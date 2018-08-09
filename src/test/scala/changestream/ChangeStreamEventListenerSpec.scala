@@ -56,6 +56,36 @@ class ChangeStreamEventListenerSpec extends Base with Config {
   }
 
   "When keeping track of safe positions" should {
+    "treat begin transaction as safe when begin transaction is present" in {
+      header.setEventType(ROTATE)
+      header.setNextPosition(1)
+      val rotateData = new RotateEventData()
+      rotateData.setBinlogFilename("foo")
+      rotateData.setBinlogPosition(1)
+      val rotate = new Event(header, rotateData)
+      ChangeStreamEventListener.onEvent(rotate)
+
+      header.setEventType(QUERY)
+      header.setNextPosition(3)
+      val queryData = new QueryEventData()
+      queryData.setSql("begin")
+      val query = new Event(header, queryData)
+      ChangeStreamEventListener.onEvent(query)
+
+      header.setEventType(ROWS_QUERY)
+      header.setNextPosition(4)
+      val data = new IntVarEventData()
+      val rows_query = new Event(header, data)
+      ChangeStreamEventListener.onEvent(rows_query)
+
+      header.setEventType(TABLE_MAP)
+      header.setNextPosition(5)
+      val table_map = new Event(header, data)
+      ChangeStreamEventListener.onEvent(table_map)
+
+      ChangeStreamEventListener.getNextPosition should be("foo:3")
+    }
+
     "treat rows query as safe when rows query is present" in {
       header.setEventType(ROTATE)
       header.setNextPosition(1)
@@ -97,7 +127,7 @@ class ChangeStreamEventListenerSpec extends Base with Config {
       ChangeStreamEventListener.getNextPosition should be("foo:3")
     }
 
-    "rows query position is cleared out after XID event is received" in {
+    "rows query and table map positions are replaced with XID nextPosition after XID event is received" in {
       header.setEventType(ROTATE)
       header.setNextPosition(1)
       val rotateData = new RotateEventData()
@@ -122,7 +152,7 @@ class ChangeStreamEventListenerSpec extends Base with Config {
       val xid = new Event(header, data)
       ChangeStreamEventListener.onEvent(xid)
 
-      ChangeStreamEventListener.getNextPosition should be("foo:3")
+      ChangeStreamEventListener.getNextPosition should be("foo:4")
     }
   }
 

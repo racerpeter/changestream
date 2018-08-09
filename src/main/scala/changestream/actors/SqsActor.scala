@@ -76,7 +76,15 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
     val url = Await.result(queueUrl, TIMEOUT milliseconds)
     log.info(s"Connected to SQS queue ${sqsQueue} with ARN ${url}")
   }
-  override def postStop() = cancelDelayedFlush
+  override def postStop() = {
+    import java.util.concurrent.TimeUnit
+    cancelDelayedFlush
+    // attempt graceful shutdown of the internal client
+    val executor = client.client.getExecutorService()
+    executor.shutdown()
+    executor.awaitTermination(60, TimeUnit.SECONDS)
+    client.client.shutdown()
+  }
 
   def receive = {
     case MutationWithInfo(_, pos, _, _, Some(message: String)) =>
@@ -115,6 +123,7 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
         if(failed.size() > 0) {
           log.error(s"Some messages failed to enqueue on ${sqsQueue} " +
             s"(sent: ${result.getSuccessful.size()}, failed: ${failed.size()})")
+          // TODO retry N times then exit
         }
         else {
           log.debug(s"Successfully sent message batch to ${sqsQueue} " +
@@ -123,7 +132,7 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
         nextHop ! EmitterResult(position, Some(getBatchResult(result)))
       case Failure(exception) =>
         log.error(s"Failed to send message batch to ${sqsQueue}: ${exception.getMessage}", exception)
-        throw exception
+        throw exception // TODO retry N times then exit
     }
   }
 
