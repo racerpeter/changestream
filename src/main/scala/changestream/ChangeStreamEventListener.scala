@@ -1,7 +1,9 @@
 package changestream
 
 import akka.Done
-import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, CoordinatedShutdown, Props}
+import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, CoordinatedShutdown, PoisonPill, Props}
+import akka.io.IO
+import akka.pattern.ask
 import akka.util.Timeout
 import changestream.actors.PositionSaver._
 import changestream.actors._
@@ -14,13 +16,15 @@ import com.github.shyiko.mysql.binlog.BinaryLogClient.EventListener
 import com.github.shyiko.mysql.binlog.event.EventType._
 import org.slf4j.LoggerFactory
 import com.typesafe.config.Config
+import spray.can.Http
 
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.Future
 
 object ChangeStreamEventListener extends EventListener {
   protected val log = LoggerFactory.getLogger(getClass)
-  protected implicit val system = ActorSystem("changestream")
+  implicit val system = ActorSystem("changestream")
   protected implicit val ec = system.dispatcher
+  protected implicit val timeout = Timeout(10 seconds)
 
   protected val systemDatabases = Seq("information_schema", "mysql", "performance_schema", "sys")
   protected val whitelist: java.util.List[String] = new java.util.LinkedList[String]()
@@ -37,42 +41,56 @@ object ChangeStreamEventListener extends EventListener {
   protected lazy val columnInfoActor = system.actorOf(Props(new ColumnInfoActor(_ => formatterActor)), name = "columnInfoActor")
   protected lazy val transactionActor = system.actorOf(Props(new TransactionActor(_ => columnInfoActor)), name = "transactionActor")
 
+  /** Gracefully handle application shutdown from
+    *  - Normal program exit
+    *  - TERM signal
+    *  - System reboot/shutdown
+    */
+  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseBeforeServiceUnbind, "disconnectBinlogClient") { () =>
+    log.info("Initiating shutdown...")
+
+    Future { ChangeStream.client.disconnect() }.map(_ => Done)
+  }
+  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceStop, "stopControlServer") { () =>
+    log.info("Shutting down control server...")
+
+    IO(Http).ask(Http.CloseAll).map(_ => Done)
+  }
+
   CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceUnbind, "drainPipeline") { () =>
     import akka.pattern.gracefulStop
     log.info("Draining event pipeline...")
 
-    for {
-      _ <- gracefulStop(transactionActor, 5 seconds)
-      _ <- gracefulStop(columnInfoActor, 5 seconds)
-      _ <- gracefulStop(formatterActor, 5 seconds)
-      _ <- emitter match {
+    val combinedFuture = for {
+      tR <- gracefulStop(transactionActor, 5 seconds)
+      cR <- gracefulStop(columnInfoActor, 5 seconds)
+      fR <- gracefulStop(formatterActor, 5 seconds)
+      eR <- emitter match {
         case None =>
           Future { Done }
         case Some(actor) =>
           // stop and wait for futures (i.e. external calls) to complete
-          gracefulStop(actor, 30 seconds).map(_ => Done)
+          gracefulStop(actor, 30 seconds)
       }
-    } yield Done
+    } yield (tR, cR, fR, eR)
+
+    combinedFuture.map(_ => Done)
   }
 
-  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "saveLatestPosition") { () =>
-    import akka.actor.{Terminated, PoisonPill}
-    log.info("Draining position saver...")
+  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "saveLastPosition") { () =>
+    import akka.pattern.gracefulStop
+    log.info("Saving last position...")
 
     positionSaver match {
       case None =>
         Future { Done }
       case Some(actor) =>
-        val saverTerminatePromise = Promise[Done]()
-        system.actorOf(Props(new Actor {
-          context.watch(actor)
-          def receive = {
-            case Terminated(_) => saverTerminatePromise.success(Done)
-          }
-        }))
-        actor ! PoisonPill
-        saverTerminatePromise.future
+        gracefulStop(actor, 30 seconds).map(_ => Done)
     }
+  }
+
+  def shutdown() = {
+    CoordinatedShutdown(system).run(CoordinatedShutdown.JvmExitReason)
   }
 
   /** Allows the configuration for the listener object to be set on startup.
@@ -114,6 +132,22 @@ object ChangeStreamEventListener extends EventListener {
         case None => Some(system.actorOf(Props(new StdoutActor(_ => positionSaver.get)), name = "emitterActor"))
         case _ => emitter
       }
+    }
+  }
+
+  /** Start the HTTP server for status and control **/
+  def startControlServer(config: Config) = {
+    val controlBind = Http.Bind(
+      listener = system.actorOf(Props[ControlInterfaceActor], "control-interface"),
+      interface = config.getString("control.host"),
+      port = config.getInt("control.port")
+    )
+
+    IO(Http).ask(controlBind).map {
+      case Http.Bound(address) =>
+        log.info(s"Control interface bound to ${address}")
+      case Http.CommandFailed(cmd) =>
+        log.warn(s"Could not bing control interface: ${cmd.failureMessage}")
     }
   }
 
