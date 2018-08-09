@@ -22,7 +22,7 @@ import scala.concurrent.Future
 
 object ChangeStreamEventListener extends EventListener {
   protected val log = LoggerFactory.getLogger(getClass)
-  protected implicit val system = ActorSystem("changestream")
+  implicit val system = ActorSystem("changestream") // public for tests
   protected implicit val ec = system.dispatcher
   protected implicit val timeout = Timeout(10 seconds)
 
