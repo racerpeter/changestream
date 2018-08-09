@@ -133,11 +133,8 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
 
   override def postStop() = {
     cancelDelayedFlush
-
-    // TODO: this does mean that any in-flight messages would be buffered
     bufferWriter.close()
     bufferFile.delete()
-
     client.shutdown()
   }
 

@@ -49,7 +49,7 @@ class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
       }
 
     case CommitTransaction(position) =>
-      log.debug(s"Received Commit")
+      log.debug(s"Received Commit with position ${position}")
       previousMutation.foreach { mutation =>
         log.debug(s"Adding transaction info and forwarding to the ${nextHop.path.name} actor")
         nextHop ! mutation.copy(
