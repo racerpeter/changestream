@@ -1,5 +1,11 @@
 # Changestream Changelog
 
+
+## 0.3.1 (2018-08-06)
+
+- Fixed regression in SQL string length limiting
+
+
 ## 0.3.0 (2018-08-05)
 
 - Added PositionSaver to persist the last emitted position for graceful restarts

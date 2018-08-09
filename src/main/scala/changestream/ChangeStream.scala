@@ -80,6 +80,7 @@ object ChangeStream extends App {
 
   /** Register the objects that will receive `onEvent` calls and deserialize data **/
   ChangeStreamEventListener.setConfig(config)
+  ChangestreamEventDeserializerConfig.setConfig(config)
   client.registerEventListener(ChangeStreamEventListener)
   client.setEventDeserializer(ChangeStreamEventDeserializer)
 
