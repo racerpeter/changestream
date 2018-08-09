@@ -1,7 +1,6 @@
 package changestream.actors
 
-import akka.actor.{Actor, ActorRef, ActorRefFactory, PoisonPill}
-import akka.pattern.pipe
+import akka.actor.{Actor, ActorRef, ActorRefFactory}
 import com.github.mauricio.async.db.{Configuration, RowData}
 import com.typesafe.config.{Config, ConfigFactory}
 import org.slf4j.LoggerFactory
