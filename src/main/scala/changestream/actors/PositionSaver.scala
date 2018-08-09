@@ -35,7 +35,6 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
   protected val SAVER_FILE_PATH = config.getString("position-saver.file-path")
   protected lazy val saverFile = new File(SAVER_FILE_PATH)
 
-  protected var cancellableSchedule: Option[Cancellable] = None
   protected def setDelayedSave(origSender: ActorRef) = {
     val scheduler = context.system.scheduler
     cancelDelayedSave
@@ -50,6 +49,7 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
   protected def cancelDelayedSave = cancellableSchedule.foreach(_.cancel())
 
   // Mutable State!!
+  protected var cancellableSchedule: Option[Cancellable] = None
   protected var currentRecordCount = 0
   protected var currentPosition: Option[String] = None
   // End Mutable State!!
