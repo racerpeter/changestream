@@ -1,7 +1,7 @@
 package changestream
 
 import akka.Done
-import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, CoordinatedShutdown, PoisonPill, Props}
+import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, CoordinatedShutdown, Props}
 import akka.util.Timeout
 import changestream.actors.PositionSaver._
 import changestream.actors._
@@ -15,7 +15,7 @@ import com.github.shyiko.mysql.binlog.event.EventType._
 import org.slf4j.LoggerFactory
 import com.typesafe.config.Config
 
-import scala.concurrent.Future
+import scala.concurrent.{Future, Promise}
 
 object ChangeStreamEventListener extends EventListener {
   protected val log = LoggerFactory.getLogger(getClass)
@@ -37,9 +37,9 @@ object ChangeStreamEventListener extends EventListener {
   protected lazy val columnInfoActor = system.actorOf(Props(new ColumnInfoActor(_ => formatterActor)), name = "columnInfoActor")
   protected lazy val transactionActor = system.actorOf(Props(new TransactionActor(_ => columnInfoActor)), name = "transactionActor")
 
-  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceUnbind, "terminatePipeline") { () =>
+  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceUnbind, "drainPipeline") { () =>
     import akka.pattern.gracefulStop
-    log.info("Stopping event pipeline...")
+    log.info("Draining event pipeline...")
 
     for {
       _ <- gracefulStop(transactionActor, 5 seconds)
@@ -55,15 +55,23 @@ object ChangeStreamEventListener extends EventListener {
     } yield Done
   }
 
-  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "drainEmitter") { () =>
-    import akka.pattern.gracefulStop
-    log.info("Draining emitter...")
+  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "saveLatestPosition") { () =>
+    import akka.actor.{Terminated, PoisonPill}
+    log.info("Draining position saver...")
 
     positionSaver match {
       case None =>
         Future { Done }
       case Some(actor) =>
-        gracefulStop(actor, 5 seconds).map(_ => Done)
+        val saverTerminatePromise = Promise[Done]()
+        system.actorOf(Props(new Actor {
+          context.watch(actor)
+          def receive = {
+            case Terminated(_) => saverTerminatePromise.success(Done)
+          }
+        }))
+        actor ! PoisonPill
+        saverTerminatePromise.future
     }
   }
 
