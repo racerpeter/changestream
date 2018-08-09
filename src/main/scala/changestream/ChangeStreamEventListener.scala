@@ -238,8 +238,9 @@ object ChangeStreamEventListener extends EventListener {
         Some(Gtid(event.getData[GtidEventData].getGtid))
 
       case XID =>
-        currentRowsQueryPosition = None
         currentTransactionPosition = None
+        currentRowsQueryPosition = None
+        currentTableMapPosition = Some(header.getNextPosition) // use this as a last resort behind the other three
         Some(CommitTransaction(header.getNextPosition))
 
       case QUERY =>
