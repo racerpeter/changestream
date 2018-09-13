@@ -9,4 +9,4 @@ SQS and/or SNS is trusted by many companies:
 - [Dropbox](https://www.youtube.com/watch?v=mP46FviScYQ)
 - [Unbounce](http://inside.unbounce.com/product-dev/aws-messaging-patterns/)
 - [Kapost](http://engineering.kapost.com/2015/07/decoupling-ruby-applications-with-amazon-sns-sqs/)
-- [Mavenlink](https://www.mavenlink.com/careers) (In Development)
+- [Mavenlink](https://www.mavenlink.com/careers)
