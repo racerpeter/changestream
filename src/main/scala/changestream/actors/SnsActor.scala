@@ -15,25 +15,10 @@ import org.slf4j.LoggerFactory
 import scala.collection.mutable
 import scala.concurrent.Future
 
-<<<<<<< HEAD
-class SnsActor(config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
-=======
-object SnsActor {
-  def getTopic(mutation: MutationEvent, topic: String, topicHasVariable: Boolean = true): String = {
-    val database = mutation.database.replaceAll("[^a-zA-Z0-9\\-_]", "-")
-    val tableName = mutation.tableName.replaceAll("[^a-zA-Z0-9\\-_]", "-")
-    topicHasVariable match {
-      case true => topic.replace("{database}", database).replace("{tableName}", tableName)
-      case false => topic
-    }
-  }
-}
-
 class SnsActor(getNextHop: ActorRefFactory => ActorRef,
                config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
 
   protected val nextHop = getNextHop(context)
->>>>>>> master
   protected val log = LoggerFactory.getLogger(getClass)
   protected implicit val ec = context.dispatcher
 
@@ -77,14 +62,8 @@ class SnsActor(getNextHop: ActorRefFactory => ActorRef,
       log.debug(s"Received message of size ${message.length}")
       log.trace(s"Received message: ${message}")
 
-<<<<<<< HEAD
-      val origSender = sender()
       val topic = Topic.getTopic(mutation, snsTopic, snsTopicHasVariable)
-      val topicArn = topicArns.getOrElse(topic, client.createTopic(topic))
-=======
-      val topic = SnsActor.getTopic(mutation, snsTopic, snsTopicHasVariable)
       val topicArn = topicArns.getOrElse(topic, getOrCreateTopic(topic))
->>>>>>> master
       topicArns.update(topic, topicArn)
 
       val request = topicArn.flatMap(topic => client.publish(topic.getTopicArn, message))

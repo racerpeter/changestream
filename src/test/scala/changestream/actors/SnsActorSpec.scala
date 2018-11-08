@@ -1,15 +1,9 @@
 package changestream.actors
 
-<<<<<<< HEAD
-import akka.actor.Props
-import akka.testkit.TestActorRef
-import changestream.helpers.{Emitter, Config}
-=======
 import akka.actor.{ActorRefFactory, Props}
 import akka.testkit.{TestActorRef, TestProbe}
 import changestream.actors.PositionSaver.EmitterResult
 import changestream.helpers.{Config, Emitter}
->>>>>>> master
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
