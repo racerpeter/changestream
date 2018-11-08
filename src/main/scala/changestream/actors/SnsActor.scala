@@ -4,7 +4,7 @@ import scala.language.postfixOps
 import scala.util.{Failure, Success}
 import akka.actor.{Actor, ActorRef, ActorRefFactory}
 import changestream.actors.PositionSaver.EmitterResult
-import changestream.events.{MutationEvent, MutationWithInfo}
+import changestream.events.MutationWithInfo
 import changestream.helpers.Topic
 import com.amazonaws.services.sns.AmazonSNSAsyncClient
 import com.amazonaws.services.sns.model.CreateTopicResult
