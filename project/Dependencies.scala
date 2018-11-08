@@ -30,7 +30,7 @@ object Dependencies {
     "com.github.dwhjames" %% "aws-wrap" % "0.12.1",
     // pub/sub
     "com.google.cloud" % "google-cloud-pubsub" % "1.52.0",
-    "org.scala-lang.modules" %% "scala-java8-compat" % "0.9.0"
+    "org.scala-lang.modules" %% "scala-java8-compat" % "0.7.0"
   )
 
   val testDependencies = Seq(

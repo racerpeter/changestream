@@ -30,12 +30,29 @@ class PubSubActor(getNextHop: ActorRefFactory => ActorRef,
   protected val topicPublishers = mutable.HashMap.empty[String, Publisher]
 
   protected def getTopicPublisher(topic: String) = {
-    val topic = ProjectTopicName.of(gcpProject, topic)
+    //TODO async get or create
+    val projectTopicName = ProjectTopicName.of(gcpProject, topic)
     val topicAdminClient = TopicAdminClient.create
-    val topicInfo = topicAdminClient.createTopic(topic)
-    topicAdminClient.close()
 
-    Publisher.newBuilder(topic).build
+    try {
+      val topicInfo = topicAdminClient.getTopic(projectTopicName)
+      log.info(s"Found topic ${projectTopicName}.")
+
+      Publisher.newBuilder(topicInfo.getName).build
+    }
+    catch {
+      // Gross.. exceptions in program flow
+      case exception: com.google.api.gax.rpc.NotFoundException =>
+        log.info(s"Couldn't find existing topic ${projectTopicName}, creating...")
+
+        val topicInfo = topicAdminClient.createTopic(projectTopicName)
+        log.info(s"Created topic ${projectTopicName}.")
+
+        Publisher.newBuilder(topicInfo.getName).build
+    }
+    finally {
+      topicAdminClient.close()
+    }
   }
 
   def publish(publisher: Publisher, topic: String, message: String, pos: String) = {
@@ -47,12 +64,12 @@ class PubSubActor(getNextHop: ActorRefFactory => ActorRef,
       override def run {
         try {
           val messageId = messageIdJavaFuture.get(TIMEOUT, TimeUnit.SECONDS)
-          log.debug(s"Successfully published message to ${topic} (messageId ${messageId})")
+          log.debug(s"Successfully published message to ${publisher.getTopicNameString} (messageId ${messageId})")
           nextHop ! EmitterResult(pos)
         }
         catch {
           case exception: Exception =>
-            log.error(s"Failed to publish to topic ${topic}: ${exception.getMessage}")
+            log.error(s"Failed to publish to topic ${publisher.getTopicNameString}: ${exception.getMessage}")
             throw exception
             // TODO retry N times then exit
         }
@@ -64,6 +81,8 @@ class PubSubActor(getNextHop: ActorRefFactory => ActorRef,
 
   override def postStop = {
     topicPublishers.values.par.foreach { publisher =>
+      log.info(s"Shutting down publisher for topic ${publisher.getTopicNameString}")
+
       publisher.shutdown()
       publisher.awaitTermination(1, TimeUnit.MINUTES)
     }

@@ -16,7 +16,7 @@ class PubSubActorSpec extends Emitter with Config {
   val actorRef = TestActorRef(Props(classOf[PubSubActor], maker, gcpConfig))
 
   val configWithInterpolation = ConfigFactory.
-    parseString("gcp.pubsub.topic = \"__integration_tests-{database}-{tableName}\"").
+    parseString("gcp.pubsub.topic = \"integration_tests-{database}-{tableName}\"").
     withFallback(gcpConfig)
   val pubsubWithInterpolation = TestActorRef(Props(classOf[PubSubActor], maker, configWithInterpolation))
 
