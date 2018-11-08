@@ -2,7 +2,7 @@ package changestream.actors
 
 import akka.actor.Props
 import akka.testkit.TestActorRef
-import changestream.helpers.{Emitter, Config, Fixtures}
+import changestream.helpers.{Emitter, Config}
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
