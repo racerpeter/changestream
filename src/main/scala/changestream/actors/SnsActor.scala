@@ -2,7 +2,8 @@ package changestream.actors
 
 import scala.language.postfixOps
 import scala.util.{Failure, Success}
-import akka.actor.Actor
+import akka.actor.{Actor, ActorRef, ActorRefFactory}
+import changestream.actors.PositionSaver.EmitterResult
 import changestream.events.{MutationEvent, MutationWithInfo}
 import changestream.helpers.Topic
 import com.amazonaws.services.sns.AmazonSNSAsyncClient
@@ -14,7 +15,25 @@ import org.slf4j.LoggerFactory
 import scala.collection.mutable
 import scala.concurrent.Future
 
+<<<<<<< HEAD
 class SnsActor(config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
+=======
+object SnsActor {
+  def getTopic(mutation: MutationEvent, topic: String, topicHasVariable: Boolean = true): String = {
+    val database = mutation.database.replaceAll("[^a-zA-Z0-9\\-_]", "-")
+    val tableName = mutation.tableName.replaceAll("[^a-zA-Z0-9\\-_]", "-")
+    topicHasVariable match {
+      case true => topic.replace("{database}", database).replace("{tableName}", tableName)
+      case false => topic
+    }
+  }
+}
+
+class SnsActor(getNextHop: ActorRefFactory => ActorRef,
+               config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
+
+  protected val nextHop = getNextHop(context)
+>>>>>>> master
   protected val log = LoggerFactory.getLogger(getClass)
   protected implicit val ec = context.dispatcher
 
@@ -32,13 +51,40 @@ class SnsActor(config: Config = ConfigFactory.load().getConfig("changestream")) 
   )
   protected val topicArns = mutable.HashMap.empty[String, Future[CreateTopicResult]]
 
-  def receive = {
-    case MutationWithInfo(mutation, _, _, Some(message: String)) =>
-      log.debug(s"Received message: ${message}")
+  protected def getOrCreateTopic(topic: String) = {
+    val ret = client.createTopic(topic)
+    ret onComplete {
+      case Success(topicResult) =>
+        log.info(s"Ready to publish messages to SNS topic ${topic} (${topicResult.getTopicArn}).")
+      case Failure(exception) =>
+        log.error(s"Failed to find/create SNS topic ${topic}.", exception.getMessage)
+        throw exception
+    }
+    ret
+  }
 
+  override def postStop = {
+    import java.util.concurrent.TimeUnit
+    // attempt graceful shutdown
+    val executor = client.client.getExecutorService()
+    executor.shutdown()
+    executor.awaitTermination(60, TimeUnit.SECONDS)
+    client.client.shutdown()
+  }
+
+  def receive = {
+    case MutationWithInfo(mutation, pos, _, _, Some(message: String)) =>
+      log.debug(s"Received message of size ${message.length}")
+      log.trace(s"Received message: ${message}")
+
+<<<<<<< HEAD
       val origSender = sender()
       val topic = Topic.getTopic(mutation, snsTopic, snsTopicHasVariable)
       val topicArn = topicArns.getOrElse(topic, client.createTopic(topic))
+=======
+      val topic = SnsActor.getTopic(mutation, snsTopic, snsTopicHasVariable)
+      val topicArn = topicArns.getOrElse(topic, getOrCreateTopic(topic))
+>>>>>>> master
       topicArns.update(topic, topicArn)
 
       val request = topicArn.flatMap(topic => client.publish(topic.getTopicArn, message))
@@ -46,10 +92,11 @@ class SnsActor(config: Config = ConfigFactory.load().getConfig("changestream")) 
       request onComplete {
         case Success(result) =>
           log.debug(s"Successfully published message to ${topic} (messageId ${result.getMessageId})")
-          origSender ! akka.actor.Status.Success(result.getMessageId)
+          nextHop ! EmitterResult(pos)
         case Failure(exception) =>
           log.error(s"Failed to publish to topic ${topic}: ${exception.getMessage}")
           throw exception
+          // TODO retry N times then exit
       }
   }
 }

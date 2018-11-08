@@ -50,7 +50,7 @@ class JsonFormatterActorSpec extends Base with Config {
 
     val messages = probe.receiveN(eventCount, 5000 milliseconds)
     messages.map({
-      case MutationWithInfo(m, tx, col, Some(message: String)) =>
+      case MutationWithInfo(m, pos, tx, col, Some(message: String)) =>
         m should be(mutation.mutation)
         tx should be(mutation.transaction)
         col should be(mutation.columns)
@@ -68,7 +68,7 @@ class JsonFormatterActorSpec extends Base with Config {
 
     val messages = probe.receiveN(eventCount, 5000 milliseconds)
     messages.map({
-      case MutationWithInfo(m, tx, col, Some(message: String)) =>
+      case MutationWithInfo(m, pos, tx, col, Some(message: String)) =>
         m should be(mutation.mutation)
         tx should be(mutation.transaction)
         col should be(mutation.columns)
@@ -86,7 +86,7 @@ class JsonFormatterActorSpec extends Base with Config {
 
     val messages = probe.receiveN(eventCount, 5000 milliseconds)
     messages.map({
-      case MutationWithInfo(m, tx, col, Some(message: String)) =>
+      case MutationWithInfo(m, pos, tx, col, Some(message: String)) =>
         m should be(mutation.mutation)
         tx should be(mutation.transaction)
         col should be(mutation.columns)
@@ -389,7 +389,7 @@ is multiline""")))
       formatterActor ! validMutation
       probe.receiveN(1)
       formatterActor ! validMutation.copy(columns = None)
-      probe.expectNoMsg()
+      probe.expectNoMessage()
     }
   }
 

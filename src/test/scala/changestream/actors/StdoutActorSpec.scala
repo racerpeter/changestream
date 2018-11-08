@@ -1,21 +1,24 @@
 package changestream.actors
 
-import akka.actor.Props
-import akka.testkit.TestActorRef
-import changestream.helpers.{Emitter, Config}
+import akka.actor.{ActorRefFactory, Props}
+import akka.testkit.{TestActorRef, TestProbe}
+import changestream.actors.PositionSaver.EmitterResult
+import changestream.helpers.{Config, Emitter}
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
 class StdoutActorSpec extends Emitter with Config {
-  val actorRef = TestActorRef(Props(new StdoutActor(awsConfig)))
+  val probe = TestProbe()
+  val maker = (_: ActorRefFactory) => probe.ref
+  val actorRef = TestActorRef(Props(classOf[StdoutActor], maker, awsConfig))
 
-  "When SnsActor receives a single valid message" should {
-    "Immediately publish the message to SNS" in {
+  "When StdoutActor receives a single valid message" should {
+    "Print to stdout and forward result" in {
       actorRef ! message
 
-      val result = expectMsgType[akka.actor.Status.Success](50000 milliseconds)
-      result.status shouldBe a[String]
+      val result = probe.expectMsgType[EmitterResult](5000 milliseconds)
+      result.position should be(message.nextPosition)
     }
   }
 }

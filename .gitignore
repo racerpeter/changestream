@@ -7,6 +7,7 @@
 .idea/dictionaries
 .idea/vcs.xml
 .idea/jsLibraryMappings.xml
+.idea/misc.xml
 
 # Sensitive or high-churn files:
 .idea/dataSources.ids
@@ -19,6 +20,14 @@
 # Gradle:
 .idea/gradle.xml
 .idea/libraries
+
+# Gradle and Maven with auto-import
+# When using Gradle or Maven with auto-import, you should exclude module files,
+# since they will be recreated, and may cause churn.  Uncomment if using
+# auto-import.
+.idea/modules.xml
+.idea/*.iml
+.idea/modules
 
 ## File-based project format:
 *.iws
@@ -50,3 +59,4 @@ project/plugins/project/
 *.overrides.conf
 
 .DS_Store
+test.txt

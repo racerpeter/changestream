@@ -1,7 +1,6 @@
 package changestream.actors
 
 import akka.actor.{Actor, ActorRef, ActorRefFactory}
-import akka.pattern.pipe
 import com.github.mauricio.async.db.{Configuration, RowData}
 import com.typesafe.config.{Config, ConfigFactory}
 import org.slf4j.LoggerFactory
@@ -47,7 +46,16 @@ class ColumnInfoActor (
     config.getInt("port"),
     Some(config.getString("password"))
   )
-  private val pool = new ConnectionPool(new MySQLConnectionFactory(mysqlConfig), PoolConfiguration.Default)
+  // TODO: if we get a ton of events for the same table and database at once, we will exhaust the connection pool
+  // before we resolve the metadata. This can happen when changestream is stopped, then the schema changes, then its restarted
+  // because changestream is unable to get the metadata, and continues to try fetching it
+  // We need to implement some caching of the negative case, and also avoid kicking off multiple queries for the same metdata
+  // at the same time
+  private val pool = new ConnectionPool(
+    new MySQLConnectionFactory(mysqlConfig),
+    //TODO: lets make this configurable
+    PoolConfiguration(maxObjects = 10, maxIdle = 4, maxQueueSize = 10000)
+  )
 
   // Mutable State
   protected var _schemaSequence = -1
@@ -75,9 +83,7 @@ class ColumnInfoActor (
     preLoadColumnData
   }
 
-  override def postStop() = {
-    Await.result(pool.disconnect, TIMEOUT milliseconds)
-  }
+  override def postStop() = Await.result(pool.disconnect, TIMEOUT milliseconds)
 
   def receive = {
     case event: MutationWithInfo =>
@@ -90,13 +96,21 @@ class ColumnInfoActor (
           nextHop ! event.copy(columns = info)
 
         case None =>
-          log.debug(s"Couldn't find column info for event on table ${event.mutation.cacheKey} -- buffering mutation and kicking off a query")
+          val metadataRequestIsPending = mutationBuffer.contains(event.mutation.cacheKey)
           val pending = PendingMutation(getNextSchemaSequence, event)
+
           mutationBuffer(event.mutation.cacheKey) = mutationBuffer.get(event.mutation.cacheKey).fold(List(pending))(buffer =>
             buffer :+ pending
           )
 
-          requestColumnInfo(pending.schemaSequence, event.mutation.database, event.mutation.tableName)
+          metadataRequestIsPending match {
+            case true =>
+              log.debug(s"Couldn't find column info for event on table ${event.mutation.cacheKey} and a metadata request is pending -- buffering")
+            case false =>
+              log.debug(s"Couldn't find column info for event on table ${event.mutation.cacheKey} -- buffering mutation and kicking off a query")
+              requestColumnInfo(pending.schemaSequence, event.mutation.database, event.mutation.tableName)
+          }
+
       }
 
     case columnsInfo: ColumnsInfo =>
@@ -105,7 +119,8 @@ class ColumnInfoActor (
       columnsInfoCache(columnsInfo.cacheKey) = columnsInfo
 
       mutationBuffer.remove(columnsInfo.cacheKey).foreach({ bufferedMutations =>
-        // only satisfy mutations that came in after this column info was requested to avoid timing issues with several alters on the same table in quick succession
+        // only satisfy mutations that came in after this column info was requested to avoid timing
+        // issues with several alters on the same table in quick succession
         val (ready, stillPending) = bufferedMutations.partition(mutation => columnsInfo.schemaSequence <= mutation.schemaSequence)
         mutationBuffer.put(columnsInfo.cacheKey, stillPending)
 
@@ -125,11 +140,15 @@ class ColumnInfoActor (
   protected def requestColumnInfo(schemaSequence: Long, database: String, tableName: String) = {
     getColumnsInfo(schemaSequence, database, tableName) recover {
       case exception =>
+        // this happens when changestream has an error communicating with mysql
         log.error(s"Couldn't fetch column info for ${database}.${tableName}", exception)
         throw exception
     } map {
-      case Some(result) => self ! result
-      case None => log.warn(s"No column metadata found for table ${database}.${tableName}")
+      case Some(result) =>
+        self ! result
+      case None =>
+        // this happens when the table and/or datagbase no longer exists when changestream attempts to replay the binlog
+        log.error(s"No column metadata found for table ${database}.${tableName}. It is likely that the database schema has been modified.")
     }
   }
 

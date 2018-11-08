@@ -27,7 +27,10 @@ class TransactionActorSpec extends Base {
 
   def expectMessageFuzzyGuidMatch(mutation: MutationWithInfo) = {
     val msg = probe.expectMsgType[MutationWithInfo]
-    val expectObj = mutation.copy(transaction = mutation.transaction.map(info => info.copy(gtid = msg.transaction.get.gtid)))
+    val expectObj = mutation.copy(
+      nextPosition = msg.nextPosition,
+      transaction = mutation.transaction.map(info => info.copy(gtid = msg.transaction.get.gtid))
+    )
     msg should be(expectObj)
   }
 
@@ -43,7 +46,7 @@ class TransactionActorSpec extends Base {
         transactionActor ! BeginTransaction
 
         transactionActor ! mutationFirstInput
-        probe.expectNoMsg
+        probe.expectNoMessage
       }
 
       "when receiving a subsequent event should emit previous event" in {
@@ -78,7 +81,7 @@ class TransactionActorSpec extends Base {
         transactionActor ! mutationLastInput
         probe.receiveN(2)
 
-        transactionActor ! CommitTransaction
+        transactionActor ! CommitTransaction(1)
         expectMessageFuzzyGuidMatch(mutationLastOutput)
       }
     }
@@ -105,7 +108,7 @@ class TransactionActorSpec extends Base {
     "not be in a transaction state after a commit" in {
       transactionActor ! BeginTransaction
       transactionActor ! mutationFirstInput
-      transactionActor ! CommitTransaction
+      transactionActor ! CommitTransaction(1)
       probe.receiveN(1)
 
       transactionActor ! mutationNextInput
@@ -118,7 +121,7 @@ class TransactionActorSpec extends Base {
       transactionActor ! mutationFirstInput
       transactionActor ! mutationNextInput
 
-      transactionActor ! CommitTransaction
+      transactionActor ! CommitTransaction(1)
 
       val m1 = probe.expectMsgType[MutationWithInfo]
       val m2 = probe.expectMsgType[MutationWithInfo]
@@ -139,7 +142,7 @@ class TransactionActorSpec extends Base {
         transactionActor ! Gtid(gtid)
 
         transactionActor ! mutationFirstInput
-        transactionActor ! CommitTransaction
+        transactionActor ! CommitTransaction(1)
 
         inside(probe.expectMsgType[MutationWithInfo].transaction) {
           case Some(info) =>
