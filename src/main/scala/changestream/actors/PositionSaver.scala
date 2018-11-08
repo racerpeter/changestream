@@ -20,7 +20,7 @@ object PositionSaver {
   case object GetLastSavedPositionRequest
   case object RestoreLastSavedPositionRequest
   case class GetPositionResponse(position: Option[String])
-  case class EmitterResult(position: String, meta: Option[Any] = None)
+  case class EmitterResult(position: String, sequence: Long, meta: Option[Any] = None)
 }
 
 class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
@@ -52,6 +52,7 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
   protected var cancellableSchedule: Option[Cancellable] = None
   protected var currentRecordCount = 0
   protected var currentPosition: Option[String] = None
+  protected var currentSequence: Option[Long] = None
   // End Mutable State!!
 
   private def readPosition: Option[String] = {
@@ -75,7 +76,7 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
     }
   }
 
-  def writePosition(position: Option[String], sender: Option[ActorRef] = None) = {
+  def writePosition(position: Option[String], sequence: Option[Long], sender: Option[ActorRef] = None) = {
     try {
       cancelDelayedSave
       currentRecordCount = 0
@@ -98,28 +99,32 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
     }
   }
 
-  def restoreLastSavedPosition = currentPosition = readPosition
+  def restoreLastSavedPosition = {
+    currentPosition = readPosition
+    currentSequence = None
+  }
 
   override def preStart() = {
     restoreLastSavedPosition
-    writePosition(currentPosition)
+    writePosition(currentPosition, currentSequence)
     log.info(s"Ready to save positions to file ${SAVER_FILE_PATH} (max-records=${MAX_RECORDS}, max-wait=${MAX_WAIT}).")
   }
 
   override def postStop() = {
     log.info(s"Shutting down PositionSaver and saving current position: ${currentPosition}")
-    writePosition(currentPosition, None)
+    writePosition(currentPosition, currentSequence, None)
   }
 
   def receive = {
-    case EmitterResult(position, meta) =>
+    case EmitterResult(position, sequence, meta) =>
       currentRecordCount += 1
       currentPosition = Some(position)
+      currentSequence = Some(sequence) // implement fancy logic here
 
       currentRecordCount match {
         case MAX_RECORDS =>
           log.debug(s"Received position: ${position} (persisting immediately)")
-          writePosition(currentPosition, Some(sender()))
+          writePosition(currentPosition, currentSequence, Some(sender()))
         case _ =>
           log.debug(s"Received position: ${position} (setting delayed save)")
           setDelayedSave(sender())
@@ -128,11 +133,12 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
     case SavePositionRequest(overridePosition: Option[String]) =>
       log.info(s"Saving override position: ${overridePosition} (old position: ${currentPosition})")
       currentPosition = overridePosition
-      writePosition(currentPosition, Some(sender()))
+      currentSequence = None
+      writePosition(currentPosition, currentSequence, Some(sender()))
 
     case SaveCurrentPositionRequest =>
       log.debug(s"Saving current position: ${currentPosition}")
-      writePosition(currentPosition, Some(sender()))
+      writePosition(currentPosition, currentSequence, Some(sender()))
 
     case GetPositionRequest =>
       log.debug(s"Received request for current position: ${currentPosition}")

@@ -284,7 +284,7 @@ class PositionSaverSpec extends Emitter with Config {
         val initialPosition = expectMsgType[GetPositionResponse](5000 milliseconds)
         initialPosition.position should be(None)
 
-        saverMaxRecordsOne ! EmitterResult("position")
+        saverMaxRecordsOne ! EmitterResult("position", 1)
         expectNoMessage(1000 milliseconds)
 
         val saverReloaded = TestActorRef(Props(new PositionSaver(configWithOneMaxRecord)))

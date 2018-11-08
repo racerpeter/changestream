@@ -18,6 +18,7 @@ class StdoutActorSpec extends Emitter with Config {
       actorRef ! message
 
       val result = probe.expectMsgType[EmitterResult](5000 milliseconds)
+      result.sequence should be(message.mutation.sequence)
       result.position should be(message.nextPosition)
     }
   }

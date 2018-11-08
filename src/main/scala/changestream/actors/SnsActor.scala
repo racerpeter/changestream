@@ -78,10 +78,11 @@ class SnsActor(getNextHop: ActorRefFactory => ActorRef,
 
       val request = topicArn.flatMap(topic => client.publish(topic.getTopicArn, message))
 
+      val sequence = mutation.sequence
       request onComplete {
         case Success(result) =>
           log.debug(s"Successfully published message to ${topic} (messageId ${result.getMessageId})")
-          nextHop ! EmitterResult(pos)
+          nextHop ! EmitterResult(pos, sequence)
         case Failure(exception) =>
           log.error(s"Failed to publish to topic ${topic}: ${exception.getMessage}")
           throw exception

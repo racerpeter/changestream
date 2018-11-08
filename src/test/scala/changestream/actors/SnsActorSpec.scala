@@ -27,6 +27,7 @@ class SnsActorSpec extends Emitter with Config {
 
       val result = probe.expectMsgType[EmitterResult](5000 milliseconds)
       result.position should be(message.nextPosition)
+      result.sequence should be(message.mutation.sequence)
     }
   }
 
@@ -36,6 +37,7 @@ class SnsActorSpec extends Emitter with Config {
 
       val result = probe.expectMsgType[EmitterResult](5000 milliseconds)
       result.position should be(message.nextPosition)
+      result.sequence should be(message.mutation.sequence)
     }
   }
 }
