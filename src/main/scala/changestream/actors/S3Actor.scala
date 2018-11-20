@@ -163,7 +163,7 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
 
     val batchSize = currentBatchSize
     val now = DateTime.now
-    val datePrefix = f"${now.getYear}/${now.getMonthOfYear}%02d/${now.getDayOfMonth}%02d"
+    val datePrefix = f"${now.getYear}/${now.getMonthOfYear}%02d/${now.getDayOfMonth}%02d/${now.getHourOfDay}%02d"
     val key = s"${datePrefix}/${System.nanoTime}-${batchSize}.json"
     val file = getMessageBatch
     val request = putFile(file, key)
