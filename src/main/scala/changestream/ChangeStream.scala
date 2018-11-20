@@ -1,6 +1,7 @@
 package changestream
 
 import java.io.IOException
+import java.util.concurrent.TimeoutException
 
 import com.github.shyiko.mysql.binlog.BinaryLogClient
 import com.typesafe.config.ConfigFactory
@@ -89,6 +90,9 @@ object ChangeStream extends App {
       catch {
         case e: IOException =>
           log.error("Failed to connect to MySQL to stream the binlog, retrying in 5 seconds...", e)
+          Thread.sleep(5000)
+        case e: TimeoutException =>
+          log.error("Timed out connecting to MySQL to stream the binlog, retrying in 5 seconds...", e)
           Thread.sleep(5000)
         case e: Exception =>
           log.error("Failed to connect, exiting...", e)
