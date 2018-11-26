@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.{Await, Future}
 
 object S3Actor {
-  case class FlushRequest(origSender: ActorRef)
+  case object FlushRequest
 }
 
 class S3Actor(getNextHop: ActorRefFactory => ActorRef,
@@ -44,9 +44,9 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
   protected val TIMEOUT = config.getInt("aws.timeout")
 
   protected var cancellableSchedule: Option[Cancellable] = None
-  protected def setDelayedFlush(origSender: ActorRef) = {
+  protected def setDelayedFlush = {
     val scheduler = context.system.scheduler
-    cancellableSchedule = Some(scheduler.scheduleOnce(MAX_WAIT) { self ! FlushRequest(origSender) })
+    cancellableSchedule = Some(scheduler.scheduleOnce(MAX_WAIT) { self ! FlushRequest })
   }
   protected def cancelDelayedFlush = cancellableSchedule.foreach(_.cancel())
 
@@ -139,7 +139,7 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
   }
 
   def receive = {
-    case MutationWithInfo(mutation, pos, _, _, Some(message: String)) =>
+    case MutationWithInfo(_, pos, _, _, Some(message: String)) =>
       log.debug(s"Received message of size ${message.length}")
       log.trace(s"Received message: ${message}")
 
@@ -148,22 +148,22 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
       lastPosition = pos
       bufferMessage(message)
       currentBatchSize match {
-        case BATCH_SIZE => flush(sender())
-        case _ => setDelayedFlush(sender())
+        case BATCH_SIZE => flush
+        case _ => setDelayedFlush
       }
 
-    case FlushRequest(origSender) =>
-      flush(origSender)
+    case FlushRequest =>
+      flush
   }
 
-  protected def flush(origSender: ActorRef) = {
+  protected def flush = {
     log.debug(s"Flushing ${currentBatchSize} messages to S3.")
 
     val position = lastPosition
 
     val batchSize = currentBatchSize
     val now = DateTime.now
-    val datePrefix = f"${now.getYear}/${now.getMonthOfYear}%02d/${now.getDayOfMonth}%02d"
+    val datePrefix = f"${now.getYear}/${now.getMonthOfYear}%02d/${now.getDayOfMonth}%02d/${now.getHourOfDay}%02d"
     val key = s"${datePrefix}/${System.nanoTime}-${batchSize}.json"
     val file = getMessageBatch
     val request = putFile(file, key)
@@ -171,13 +171,13 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
     val s3Url = s"${BUCKET}/${KEY_PREFIX}${key}"
 
     request onComplete {
-      case Success(result: PutObjectResult) =>
+      case Success(_: PutObjectResult) =>
         log.info(s"Successfully saved ${batchSize} messages (${file.length} bytes) to ${s3Url}.")
         file.delete()
         nextHop ! EmitterResult(position, Some(s3Url))
       case Failure(exception) =>
         log.error(s"Failed to save ${batchSize} messages from ${file.getName} (${file.length} bytes) to ${s3Url}: ${exception.getMessage}")
-        throw exception // TODO retry N times then exit
+        throw exception
     }
   }
 }

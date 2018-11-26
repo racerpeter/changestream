@@ -85,7 +85,6 @@ class SnsActor(getNextHop: ActorRefFactory => ActorRef,
         case Failure(exception) =>
           log.error(s"Failed to publish to topic ${topic}: ${exception.getMessage}")
           throw exception
-          // TODO retry N times then exit
       }
   }
 }
