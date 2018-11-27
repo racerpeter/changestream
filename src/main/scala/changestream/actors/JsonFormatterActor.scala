@@ -110,7 +110,7 @@ class JsonFormatterActor (
   def receive = {
     case message: MutationWithInfo if message.columns.isDefined => {
 
-      log.debug(s"Received ${message.mutation} for table ${message.mutation.database}.${message.mutation.tableName}")
+      log.debug("Received {} for table {}.{}", message.mutation, message.mutation.database, message.mutation.tableName)
 
       val primaryKeys = message.columns.get.columns.collect({ case col if col.isPrimary => col.name })
       val rowData = getRowData(message)
@@ -136,7 +136,7 @@ class JsonFormatterActor (
         val json = JsObject(payload)
 
         if(encryptData) {
-          log.debug(s"Encrypting JSON event and sending to the ${nextHop.path.name} actor")
+          log.debug("Encrypting JSON event and sending to the {} actor", nextHop.path.name)
           val encryptRequest = Plaintext(json)
           ask(encryptorActor, encryptRequest).map {
             case v: JsValue =>
@@ -145,12 +145,12 @@ class JsonFormatterActor (
               payload
           } pipeTo nextHop onFailure {
             case e: Exception =>
-              log.error(s"Failed to encrypt JSON event: ${e.getMessage}")
+              log.error("Failed to encrypt JSON event.", e)
               throw e
           }
         }
         else {
-          log.debug(s"Sending JSON event to the ${nextHop.path.name} actor")
+          log.debug("Sending JSON event to the {} actor.", nextHop.path.name)
           nextHop ! prepMessagePayload(message, json)
           timer.stop()
         }

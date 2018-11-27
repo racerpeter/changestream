@@ -52,14 +52,14 @@ object ChangeStream extends App {
   def disconnectClient = client.disconnect()
 
   def getConnected = {
-    log.info(s"Starting changestream...")
+    log.info("Starting changestream...")
 
     val overridePosition = System.getProperty("OVERRIDE_POSITION")
     System.setProperty("OVERRIDE_POSITION", "") // clear override after initial boot
 
     val getPositionFuture = overridePosition match {
       case overridePosition:String if overridePosition.length > 0 =>
-        log.info(s"Overriding starting binlog position with OVERRIDE_POSITION=${overridePosition}")
+        log.info("Overriding starting binlog position with OVERRIDE_POSITION={}", overridePosition)
         ChangeStreamEventListener.setPosition(Some(overridePosition))
       case _ =>
         ChangeStreamEventListener.getStoredPosition
@@ -73,12 +73,12 @@ object ChangeStream extends App {
 
   protected def setBinlogClientPosition(position: Option[String]) = position match {
     case Some(position) =>
-      log.info(s"Setting starting binlog position at ${position}")
+      log.info("Setting starting binlog position at {}.", position)
       val Array(fileName, posLong) = position.split(":")
       client.setBinlogFilename(fileName)
       client.setBinlogPosition(java.lang.Long.valueOf(posLong))
     case None =>
-      log.info(s"Starting binlog position in real time")
+      log.info("Starting binlog position in real time")
       client.setBinlogFilename(null) //scalastyle:ignore
       client.setBinlogPosition(4L)
   }
