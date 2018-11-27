@@ -24,6 +24,8 @@ import scala.concurrent.Future
 
 object ChangeStreamEventListener extends EventListener {
   protected val log = LoggerFactory.getLogger(getClass)
+  protected val counterMetric = Kamon.counter("changestream_binlog_event")
+
   implicit val system = ActorSystem("changestream") // public for tests
   protected implicit val ec = system.dispatcher
   protected implicit val timeout = Timeout(10 seconds)
@@ -201,8 +203,11 @@ object ChangeStreamEventListener extends EventListener {
     * @param binaryLogEvent The binlog event
     */
   def onEvent(binaryLogEvent: Event) = {
+    val header = binaryLogEvent.getHeader[EventHeaderV4]
+    counterMetric.refine("event_type" -> header.getEventType.toString).increment()
+
     log.debug(s"Received event: ${binaryLogEvent}")
-    val changeEvent = getChangeEvent(binaryLogEvent)
+    val changeEvent = getChangeEvent(binaryLogEvent, header)
 
     changeEvent match {
       case Some(e: TransactionEvent)  => transactionActor ! e
@@ -231,8 +236,7 @@ object ChangeStreamEventListener extends EventListener {
     * @param event The java binlog listener event
     * @return The resulting ChangeEvent
     */
-  def getChangeEvent(event: Event): Option[ChangeEvent] = {
-    val header = event.getHeader[EventHeaderV4]
+  def getChangeEvent(event: Event, header: EventHeaderV4): Option[ChangeEvent] = {
     log.debug(s"Got event of type ${header.getEventType} with ${header.getNextPosition}")
 
     header.getEventType match {
