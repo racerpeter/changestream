@@ -16,6 +16,8 @@ import com.github.shyiko.mysql.binlog.BinaryLogClient.EventListener
 import com.github.shyiko.mysql.binlog.event.EventType._
 import org.slf4j.LoggerFactory
 import com.typesafe.config.Config
+import kamon.Kamon
+import kamon.prometheus.PrometheusReporter
 import spray.can.Http
 
 import scala.concurrent.Future
@@ -56,20 +58,18 @@ object ChangeStreamEventListener extends EventListener {
     import akka.pattern.gracefulStop
     log.info("Draining event pipeline...")
 
-    val combinedFuture = for {
-      tR <- gracefulStop(transactionActor, 5 seconds)
-      cR <- gracefulStop(columnInfoActor, 5 seconds)
-      fR <- gracefulStop(formatterActor, 5 seconds)
-      eR <- emitter match {
+    for {
+      _ <- gracefulStop(transactionActor, 5 seconds)
+      _ <- gracefulStop(columnInfoActor, 5 seconds)
+      _ <- gracefulStop(formatterActor, 5 seconds)
+      _ <- emitter match {
         case None =>
           Future { Done }
         case Some(actor) =>
           // stop and wait for futures (i.e. external calls) to complete
           gracefulStop(actor, 30 seconds)
       }
-    } yield (tR, cR, fR, eR)
-
-    combinedFuture.map(_ => Done)
+    } yield Done
   }
 
   CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "saveLastPosition") { () =>
@@ -87,7 +87,10 @@ object ChangeStreamEventListener extends EventListener {
   CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceStop, "stopControlServer") { () =>
     log.info("Shutting down control server...")
 
-    IO(Http).ask(Http.CloseAll).map(_ => Done)
+    for{
+      _ <- Kamon.stopAllReporters()
+      _ <- IO(Http).ask(Http.CloseAll)
+    } yield Done
   }
 
   def shutdown() = {
@@ -152,6 +155,8 @@ object ChangeStreamEventListener extends EventListener {
       case Http.CommandFailed(cmd) =>
         log.warn(s"Could not bing control interface: ${cmd.failureMessage}")
     }
+
+    Kamon.addReporter(new PrometheusReporter())
   }
 
   /** Allows the position saver actor to be configured at runtime.

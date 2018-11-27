@@ -5,8 +5,6 @@ import java.util.concurrent.TimeoutException
 
 import com.github.shyiko.mysql.binlog.BinaryLogClient
 import com.typesafe.config.ConfigFactory
-import kamon.Kamon
-import kamon.prometheus.PrometheusReporter
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.Await
@@ -38,7 +36,6 @@ object ChangeStream extends App {
   ChangestreamEventDeserializerConfig.setConfig(config)
 
   ChangeStreamEventListener.startControlServer(config)
-  Kamon.addReporter(new PrometheusReporter())
 
   client.registerEventListener(ChangeStreamEventListener)
   client.setEventDeserializer(ChangeStreamEventDeserializer)
