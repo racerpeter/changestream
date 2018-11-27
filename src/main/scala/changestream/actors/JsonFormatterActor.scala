@@ -13,7 +13,7 @@ import DefaultJsonProtocol._
 import akka.util.Timeout
 import changestream.actors.EncryptorActor.Plaintext
 import kamon.Kamon
-import kamon.metric.{MeasurementUnit, Metric}
+import kamon.metric.MeasurementUnit
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration._
