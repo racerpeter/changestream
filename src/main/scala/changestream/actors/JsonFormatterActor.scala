@@ -13,7 +13,7 @@ import DefaultJsonProtocol._
 import akka.util.Timeout
 import changestream.actors.EncryptorActor.Plaintext
 import kamon.Kamon
-import kamon.metric.MeasurementUnit
+import kamon.metric.{MeasurementUnit, Metric}
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration._
@@ -97,6 +97,7 @@ class JsonFormatterActor (
   protected val nextHop = getNextHop(context)
   protected val log = LoggerFactory.getLogger(getClass)
   protected val jsonSizeMetric = Kamon.histogram("changestream_json_bytes", MeasurementUnit.information.bytes)
+  protected val jsonTimingMetric = Kamon.timer("changestream_json_time")
 
   protected val includeData = config.getBoolean("include-data")
   protected val prettyPrint = config.getBoolean("pretty-print")
@@ -116,6 +117,11 @@ class JsonFormatterActor (
       val oldRowData = getOldRowData(message)
 
       rowData.indices.foreach({ idx =>
+        val timer = jsonTimingMetric.refine(
+          "database" -> message.mutation.database,
+          "table" -> message.mutation.tableName
+        ).start()
+
         val row = rowData(idx)
         val oldRow = oldRowData.map(_(idx))
         val pkInfo = ListMap(primaryKeys.map({
@@ -134,7 +140,9 @@ class JsonFormatterActor (
           val encryptRequest = Plaintext(json)
           ask(encryptorActor, encryptRequest).map {
             case v: JsValue =>
-              prepMessagePayload(message, v)
+              val payload = prepMessagePayload(message, v)
+              timer.stop()
+              payload
           } pipeTo nextHop onFailure {
             case e: Exception =>
               log.error(s"Failed to encrypt JSON event: ${e.getMessage}")
@@ -144,6 +152,7 @@ class JsonFormatterActor (
         else {
           log.debug(s"Sending JSON event to the ${nextHop.path.name} actor")
           nextHop ! prepMessagePayload(message, json)
+          timer.stop()
         }
       })
     }
