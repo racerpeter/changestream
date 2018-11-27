@@ -13,7 +13,7 @@ import com.typesafe.config.ConfigFactory
 import scala.reflect.ClassTag
 
 class ChangeStreamEventListenerSpec extends Base with Config {
-  def getTypedEvent[T: ClassTag](event: Event): Option[T] = ChangeStreamEventListener.getChangeEvent(event) match {
+  def getTypedEvent[T: ClassTag](event: Event): Option[T] = ChangeStreamEventListener.getChangeEvent(event, event.getHeader[EventHeaderV4]) match {
     case Some(e: T) => Some(e)
     case _ => None
   }
