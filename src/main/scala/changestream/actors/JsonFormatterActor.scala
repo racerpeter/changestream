@@ -12,6 +12,8 @@ import spray.json._
 import DefaultJsonProtocol._
 import akka.util.Timeout
 import changestream.actors.EncryptorActor.Plaintext
+import kamon.Kamon
+import kamon.metric.MeasurementUnit
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration._
@@ -94,6 +96,7 @@ class JsonFormatterActor (
 
   protected val nextHop = getNextHop(context)
   protected val log = LoggerFactory.getLogger(getClass)
+  protected val jsonSizeMetric = Kamon.histogram("changestream_json_bytes", MeasurementUnit.information.bytes)
 
   protected val includeData = config.getBoolean("include-data")
   protected val prettyPrint = config.getBoolean("pretty-print")
@@ -105,6 +108,7 @@ class JsonFormatterActor (
 
   def receive = {
     case message: MutationWithInfo if message.columns.isDefined => {
+
       log.debug(s"Received ${message.mutation} for table ${message.mutation.database}.${message.mutation.tableName}")
 
       val primaryKeys = message.columns.get.columns.collect({ case col if col.isPrimary => col.name })
@@ -130,7 +134,7 @@ class JsonFormatterActor (
           val encryptRequest = Plaintext(json)
           ask(encryptorActor, encryptRequest).map {
             case v: JsValue =>
-              message.copy(formattedMessage = Some(getJsonString(v)))
+              prepMessagePayload(message, v)
           } pipeTo nextHop onFailure {
             case e: Exception =>
               log.error(s"Failed to encrypt JSON event: ${e.getMessage}")
@@ -139,10 +143,21 @@ class JsonFormatterActor (
         }
         else {
           log.debug(s"Sending JSON event to the ${nextHop.path.name} actor")
-          nextHop ! message.copy(formattedMessage = Some(getJsonString(json)))
+          nextHop ! prepMessagePayload(message, json)
         }
       })
     }
+  }
+
+  protected def prepMessagePayload(message: MutationWithInfo, json: JsValue) = {
+    val jsonString = getJsonString(json)
+
+    jsonSizeMetric.refine(
+      "database" -> message.mutation.database,
+      "table" -> message.mutation.tableName
+    ).record(jsonString.length)
+
+    message.copy(formattedMessage = Some(jsonString))
   }
 
   protected def getJsonString(v: JsValue) = prettyPrint match {
