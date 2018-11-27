@@ -17,6 +17,8 @@ import com.github.dwhjames.awswrap.s3.AmazonS3ScalaClient
 import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
+import kamon.Kamon
+import kamon.metric.MeasurementUnit
 
 import scala.concurrent.{Await, Future}
 
@@ -30,6 +32,12 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
 
   protected val nextHop = getNextHop(context)
   protected val log = LoggerFactory.getLogger(getClass)
+  protected val successMetric = Kamon.counter("changestream_emitter_total").refine("emitter" -> "s3", "result" -> "success")
+  protected val failureMetric = Kamon.counter("changestream_emitter_total").refine("emitter" -> "s3", "result" -> "failure")
+  protected val fileSizeSuccessMetric = Kamon.histogram("changestream_s3_bytes", MeasurementUnit.information.bytes).refine("result" -> "success")
+  protected val fileSizeFailureMetric = Kamon.histogram("changestream_s3_bytes", MeasurementUnit.information.bytes).refine("result" -> "failure")
+  protected val inFlightMetric = Kamon.rangeSampler("changestream_emitter_in_flight").refine("emitter" -> "s3")
+
   protected implicit val ec = context.dispatcher
 
   protected val BUFFER_TEMP_DIR = config.getString("aws.s3.buffer-temp-dir")
@@ -71,7 +79,7 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
     case _ if bufferDirectory.exists && bufferDirectory.canWrite =>
       File.createTempFile("buffer-", ".json", bufferDirectory)
     case _ =>
-      log.error(s"Failed to write to buffer directory ${bufferDirectory}, make sure it exists and is writeable. Using the system default temp dir instead.")
+      log.error("Failed to write to buffer directory {}, make sure it exists and is writeable. Using the system default temp dir instead.", bufferDirectory)
       File.createTempFile("buffer-", ".json")
   }
   protected def getWriterForFile = {
@@ -123,7 +131,7 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
       case Success(_: PutObjectResult) =>
         file.delete()
       case Failure(exception) =>
-        log.error(s"Failed to create test object in S3 bucket ${BUCKET} at key ${KEY_PREFIX}test.txt: ${exception.getMessage}")
+        log.error(s"Failed to create test object in S3 bucket ${BUCKET} at key ${KEY_PREFIX}test.txt.", exception)
         throw exception
     }
 
@@ -140,8 +148,10 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
 
   def receive = {
     case MutationWithInfo(_, pos, _, _, Some(message: String)) =>
-      log.debug(s"Received message of size ${message.length}")
-      log.trace(s"Received message: ${message}")
+      log.debug("Received message of size {}", message.length)
+      log.trace("Received message: {}", message)
+
+      inFlightMetric.increment()
 
       cancelDelayedFlush
 
@@ -157,7 +167,7 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
   }
 
   protected def flush = {
-    log.debug(s"Flushing ${currentBatchSize} messages to S3.")
+    log.debug("Flushing {} messages to S3.", currentBatchSize)
 
     val position = lastPosition
 
@@ -173,10 +183,20 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
     request onComplete {
       case Success(_: PutObjectResult) =>
         log.info(s"Successfully saved ${batchSize} messages (${file.length} bytes) to ${s3Url}.")
+
+        successMetric.increment(batchSize)
+        fileSizeSuccessMetric.record(file.length)
+        inFlightMetric.decrement(batchSize)
+
         file.delete()
-        nextHop ! EmitterResult(position, Some(s3Url))
+        nextHop ! EmitterResult(position, batchSize, Some(s3Url))
       case Failure(exception) =>
-        log.error(s"Failed to save ${batchSize} messages from ${file.getName} (${file.length} bytes) to ${s3Url}: ${exception.getMessage}")
+        log.error(s"Failed to save ${batchSize} messages from ${file.getName} (${file.length} bytes) to ${s3Url}.", exception)
+
+        failureMetric.increment(batchSize)
+        fileSizeFailureMetric.record(file.length)
+        inFlightMetric.decrement(batchSize)
+
         throw exception
     }
   }

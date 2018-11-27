@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import akka.actor.{Actor, ActorRef, Cancellable}
+import changestream.ChangeStreamEventListener
 import com.typesafe.config.{Config, ConfigFactory}
 import org.slf4j.LoggerFactory
 
@@ -20,7 +21,7 @@ object PositionSaver {
   case object GetLastSavedPositionRequest
   case object RestoreLastSavedPositionRequest
   case class GetPositionResponse(position: Option[String])
-  case class EmitterResult(position: String, meta: Option[Any] = None)
+  case class EmitterResult(position: String, eventCount: Long = 1, meta: Option[Any] = None)
 }
 
 class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
@@ -41,7 +42,7 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
     cancellableSchedule = MAX_WAIT.length match {
       case 0 => None
       case _ => Some(scheduler.scheduleOnce(MAX_WAIT) {
-        log.debug(s"Initiating delayed save.")
+        log.debug("Initiating delayed save.")
         self.tell(SaveCurrentPositionRequest, origSender)
       })
     }
@@ -66,7 +67,7 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
         position
       } catch {
         case exception: IOException =>
-          log.error(s"Failed to read position from position file (${SAVER_FILE_PATH}): ${exception.getMessage}")
+          log.error(s"Failed to read position from position file (${SAVER_FILE_PATH}).", exception)
           throw exception
       }
     }
@@ -87,12 +88,12 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
         case Some(str) => str
       })
       saverWriter.close()
-      log.trace(s"Save success at ${position}")
+      log.trace("Save success at {}", position)
 
       sender.map(_ ! akka.actor.Status.Success(GetPositionResponse(position)))
     } catch {
       case exception: IOException =>
-        log.error(s"Failed to write position to position file (${SAVER_FILE_PATH}): ${exception.getMessage}")
+        log.error(s"Failed to write position to position file (${SAVER_FILE_PATH}).", exception)
         sender.map(_ ! akka.actor.Status.Failure(exception))
         throw exception
     }
@@ -107,21 +108,24 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
   }
 
   override def postStop() = {
-    log.info(s"Shutting down PositionSaver and saving current position: ${currentPosition}")
+    log.info("Shutting down PositionSaver and saving current position: {}", currentPosition)
     writePosition(currentPosition, None)
   }
 
   def receive = {
-    case EmitterResult(position, meta) =>
+    case EmitterResult(position, eventCount, meta) =>
+      // TODO: this will steadily increase with each permanent failure to emit (i.e. failed to publish to s3). This is probably fine
+      ChangeStreamEventListener.inFlight.decrement(eventCount)
+
       currentRecordCount += 1
       currentPosition = Some(position)
 
       currentRecordCount match {
         case MAX_RECORDS =>
-          log.debug(s"Received position: ${position} (persisting immediately)")
+          log.debug("Received position: {} (persisting immediately)", position)
           writePosition(currentPosition, Some(sender()))
         case _ =>
-          log.debug(s"Received position: ${position} (setting delayed save)")
+          log.debug("Received position: {} (setting delayed save)", position)
           setDelayedSave(sender())
       }
 
@@ -131,11 +135,11 @@ class PositionSaver(config: Config = ConfigFactory.load().getConfig("changestrea
       writePosition(currentPosition, Some(sender()))
 
     case SaveCurrentPositionRequest =>
-      log.debug(s"Saving current position: ${currentPosition}")
+      log.debug("Saving current position: {}", currentPosition)
       writePosition(currentPosition, Some(sender()))
 
     case GetPositionRequest =>
-      log.debug(s"Received request for current position: ${currentPosition}")
+      log.debug("Received request for current position: {}", currentPosition)
       sender() ! GetPositionResponse(currentPosition)
 
     case GetLastSavedPositionRequest =>

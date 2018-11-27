@@ -25,6 +25,7 @@ import scala.concurrent.Future
 object ChangeStreamEventListener extends EventListener {
   protected val log = LoggerFactory.getLogger(getClass)
   protected val counterMetric = Kamon.counter("changestream_binlog_event")
+  protected val inFlightMetric = Kamon.rangeSampler("changestream_in_flight")
 
   implicit val system = ActorSystem("changestream") // public for tests
   protected implicit val ec = system.dispatcher
@@ -101,6 +102,8 @@ object ChangeStreamEventListener extends EventListener {
 
   def shutdownAndExit(code: Int) = shutdown().map(_ => sys.exit(code))
 
+  def inFlight = inFlightMetric
+
   /** Allows the configuration for the listener object to be set on startup.
     * The listener will look for whitelist, blacklist, and emitter settings.
     *
@@ -112,11 +115,11 @@ object ChangeStreamEventListener extends EventListener {
 
     if(config.hasPath("whitelist")) {
       config.getString("whitelist").split(',').foreach(whitelist.add(_))
-      log.info(s"Using event whitelist: ${whitelist}")
+      log.info("Using event whitelist: {}", whitelist)
     }
     else if(config.hasPath("blacklist")) {
       config.getString("blacklist").split(',').foreach(blacklist.add(_))
-      log.info(s"Using event blacklist: ${blacklist}")
+      log.info("Using event blacklist: {}", blacklist)
     }
 
     if(config.hasPath("position-saver.actor")) {
@@ -153,9 +156,9 @@ object ChangeStreamEventListener extends EventListener {
 
     IO(Http).ask(controlBind).map {
       case Http.Bound(address) =>
-        log.info(s"Control interface bound to ${address}")
+        log.info("Control interface bound to {}", address)
       case Http.CommandFailed(cmd) =>
-        log.warn(s"Could not bing control interface: ${cmd.failureMessage}")
+        log.warn("Could not bing control interface: {}", cmd.failureMessage)
     }
 
     Kamon.addReporter(new PrometheusReporter())
@@ -206,17 +209,18 @@ object ChangeStreamEventListener extends EventListener {
     val header = binaryLogEvent.getHeader[EventHeaderV4]
     counterMetric.refine("event_type" -> header.getEventType.toString).increment()
 
-    log.debug(s"Received event: ${binaryLogEvent}")
+    log.debug("Received event: {}", binaryLogEvent)
     val changeEvent = getChangeEvent(binaryLogEvent, header)
 
     changeEvent match {
       case Some(e: TransactionEvent)  => transactionActor ! e
       case Some(e: MutationEvent)     =>
+        ChangeStreamEventListener.inFlight.increment(e.rows.length)
         val nextPosition = getNextPosition
         transactionActor ! MutationWithInfo(e, nextPosition)
       case Some(e: AlterTableEvent)   => columnInfoActor ! e
       case None =>
-        log.debug(s"Ignoring ${binaryLogEvent.getHeader[EventHeaderV4].getEventType} event.")
+        log.debug("Ignoring {} event.", binaryLogEvent.getHeader[EventHeaderV4].getEventType)
     }
   }
 
@@ -237,7 +241,7 @@ object ChangeStreamEventListener extends EventListener {
     * @return The resulting ChangeEvent
     */
   def getChangeEvent(event: Event, header: EventHeaderV4): Option[ChangeEvent] = {
-    log.debug(s"Got event of type ${header.getEventType} with ${header.getNextPosition}")
+    log.debug("Got event of type {} with {}", header.getEventType, header.getNextPosition)
 
     header.getEventType match {
       case eventType if EventType.isRowMutation(eventType) =>
@@ -262,7 +266,7 @@ object ChangeStreamEventListener extends EventListener {
 
       case FORMAT_DESCRIPTION =>
         val data = event.getData[FormatDescriptionEventData]
-        log.info(s"Server version: ${data.getServerVersion}, binlog version: ${data.getBinlogVersion}")
+        log.info("Server version: {}, binlog version: {}", data.getServerVersion, data.getBinlogVersion)
         None
 
       case ROTATE =>
@@ -370,7 +374,7 @@ object ChangeStreamEventListener extends EventListener {
     }
     catch {
       case e: ClassNotFoundException =>
-        log.error(s"Couldn't load emitter class ${classString} (ClassNotFoundException), using the default emitter.")
+        log.error(s"Couldn't load emitter class ${classString} (ClassNotFoundException), using the default emitter.", e)
         None
     }
   }

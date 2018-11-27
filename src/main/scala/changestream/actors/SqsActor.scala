@@ -12,6 +12,7 @@ import com.amazonaws.services.sqs.model.SendMessageBatchResult
 import com.github.dwhjames.awswrap.sqs.AmazonSQSScalaClient
 import com.typesafe.config.{Config, ConfigFactory}
 import org.slf4j.LoggerFactory
+import kamon.Kamon
 
 import collection.JavaConverters._
 import scala.concurrent.Await
@@ -27,6 +28,10 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
 
   protected val nextHop = getNextHop(context)
   protected val log = LoggerFactory.getLogger(getClass)
+  protected val successMetric = Kamon.counter("changestream_emitter_total").refine("emitter" -> "sqs", "result" -> "success")
+  protected val failureMetric = Kamon.counter("changestream_emitter_total").refine("emitter" -> "sqs", "result" -> "failure")
+  protected val inFlightMetric = Kamon.rangeSampler("changestream_emitter_in_flight").refine("emitter" -> "sqs")
+
   protected implicit val ec = context.dispatcher
 
   protected val LIMIT = 10
@@ -68,7 +73,7 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
   protected val queueUrl = client.createQueue(sqsQueue)
   queueUrl.failed.map {
     case exception:Throwable =>
-      log.error(s"Failed to get or create SQS queue ${sqsQueue}: ${exception.getMessage}")
+      log.error(s"Failed to get or create SQS queue ${sqsQueue}.", exception)
       throw exception
   }
 
@@ -88,8 +93,8 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
 
   def receive = {
     case MutationWithInfo(_, pos, _, _, Some(message: String)) =>
-      log.debug(s"Received message of size ${message.length}")
-      log.trace(s"Received message: ${message}")
+      log.debug("Received message of size {}", message.length)
+      log.trace("Received message: {}", message)
 
       cancelDelayedFlush
 
@@ -105,9 +110,12 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
   }
 
   protected def flush(origSender: ActorRef) = {
-    log.debug(s"Flushing ${messageBuffer.length} messages to SQS.")
+    val messageCount = messageBuffer.length
+    log.debug("Flushing {} messages to SQS.", messageCount)
 
     val position = lastPosition
+
+    inFlightMetric.increment()
 
     val request = for {
       url <- queueUrl
@@ -119,18 +127,24 @@ class SqsActor(getNextHop: ActorRefFactory => ActorRef,
 
     request onComplete {
       case Success(result) =>
+        inFlightMetric.decrement()
+
         val failed = result.getFailed
+        val successful = result.getSuccessful
         if(failed.size() > 0) {
-          log.error(s"Some messages failed to enqueue on ${sqsQueue} " +
-            s"(sent: ${result.getSuccessful.size()}, failed: ${failed.size()})")
+          failureMetric.increment(failed.size())
+          log.error(s"Some messages failed to enqueue on ${sqsQueue} (sent: ${successful.size()}, failed: ${failed.size()})")
           // TODO retry N times then exit
         }
         else {
-          log.debug(s"Successfully sent message batch to ${sqsQueue} " +
-            s"(sent: ${result.getSuccessful.size()}, failed: ${failed.size()})")
+          log.debug(s"Successfully sent message batch to ${sqsQueue} (sent: ${successful.size()}, failed: ${failed.size()})")
         }
-        nextHop ! EmitterResult(position, Some(getBatchResult(result)))
+        successMetric.increment(successful.size())
+        nextHop ! EmitterResult(position, successful.size(), Some(getBatchResult(result)))
       case Failure(exception) =>
+        inFlightMetric.decrement()
+
+        failureMetric.increment(messageCount)
         log.error(s"Failed to send message batch to ${sqsQueue}: ${exception.getMessage}", exception)
         throw exception // TODO retry N times then exit
     }
