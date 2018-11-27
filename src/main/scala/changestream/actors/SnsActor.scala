@@ -10,6 +10,7 @@ import com.amazonaws.services.sns.model.CreateTopicResult
 import com.github.dwhjames.awswrap.sns.AmazonSNSScalaClient
 import com.typesafe.config.{Config, ConfigFactory}
 import org.slf4j.LoggerFactory
+import kamon.Kamon
 
 import scala.collection.mutable
 import scala.concurrent.Future
@@ -30,6 +31,10 @@ class SnsActor(getNextHop: ActorRefFactory => ActorRef,
 
   protected val nextHop = getNextHop(context)
   protected val log = LoggerFactory.getLogger(getClass)
+  protected val successMetric = Kamon.counter("changestream.emitter.total").refine("emitter" -> "sns", "result" -> "success")
+  protected val failureMetric = Kamon.counter("changestream.emitter.total").refine("emitter" -> "sns", "result" -> "failure")
+  protected val inFlightMetric = Kamon.rangeSampler("changestream.emitter.in_flight").refine("emitter" -> "sns")
+
   protected implicit val ec = context.dispatcher
 
   protected val TIMEOUT = config.getLong("aws.timeout")
@@ -69,21 +74,29 @@ class SnsActor(getNextHop: ActorRefFactory => ActorRef,
 
   def receive = {
     case MutationWithInfo(mutation, pos, _, _, Some(message: String)) =>
-      log.debug(s"Received message of size ${message.length}")
-      log.trace(s"Received message: ${message}")
+      log.debug("Received message of size {}", message.length)
+      log.trace("Received message: {}", message)
 
       val topic = SnsActor.getTopic(mutation, snsTopic, snsTopicHasVariable)
       val topicArn = topicArns.getOrElse(topic, getOrCreateTopic(topic))
       topicArns.update(topic, topicArn)
 
+      inFlightMetric.increment()
+
       val request = topicArn.flatMap(topic => client.publish(topic.getTopicArn, message))
 
       request onComplete {
         case Success(result) =>
+          inFlightMetric.decrement()
+
           log.debug(s"Successfully published message to ${topic} (messageId ${result.getMessageId})")
+          successMetric.increment()
           nextHop ! EmitterResult(pos)
         case Failure(exception) =>
-          log.error(s"Failed to publish to topic ${topic}: ${exception.getMessage}")
+          inFlightMetric.decrement()
+
+          log.error(s"Failed to publish to topic ${topic}.", exception.getMessage)
+          failureMetric.increment()
           throw exception
       }
   }

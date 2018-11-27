@@ -18,6 +18,11 @@ object Dependencies {
     // spray for http control server
     "io.spray" %% "spray-can" % sprayVersion,
     "io.spray" %% "spray-routing" % sprayVersion,
+    // instrumentation
+    "io.kamon" %% "kamon-core" % "1.1.3",
+    "io.kamon" %% "kamon-akka-2.5" % "1.1.2",
+    "io.kamon" %% "kamon-prometheus" % "1.1.1",
+    "io.kamon" %% "kamon-datadog" % "1.0.0",
     // mysql
     "com.github.shyiko" % "mysql-binlog-connector-java" % "0.13.0",
     "com.github.mauricio" %% "mysql-async" % "0.2.21",

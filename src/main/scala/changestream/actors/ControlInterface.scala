@@ -55,9 +55,9 @@ trait ControlInterface extends HttpService with DefaultJsonProtocol {
       case "all" | "trace" | "debug" | "info" | "warn" | "error" | "off" =>
         val rootLogger = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME).asInstanceOf[Logger]
         rootLogger.setLevel(Level.toLevel(level))
-        complete(s"ChangeStream logging level has been set to ${level}.")
+        complete("ChangeStream logging level has been set to {}.", level)
       case _ =>
-        log.error(s"ControlActor received invalid log level ${level}.")
+        log.error("ControlActor received invalid log level {}.", level)
         complete(StatusCodes.BadRequest, s"Invalid log level: ${level}")
     }
   }

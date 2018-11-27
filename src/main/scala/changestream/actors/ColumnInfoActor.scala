@@ -5,14 +5,13 @@ import com.github.mauricio.async.db.{Configuration, RowData}
 import com.typesafe.config.{Config, ConfigFactory}
 import org.slf4j.LoggerFactory
 
+import changestream.events._
+import com.github.mauricio.async.db.mysql.pool.MySQLConnectionFactory
+import com.github.mauricio.async.db.pool.{ConnectionPool, PoolConfiguration}
 import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.concurrent.{Await, Future}
-import changestream.events.{MutationWithInfo, _}
-import com.github.mauricio.async.db.mysql.pool.MySQLConnectionFactory
-import com.github.mauricio.async.db.pool.{ConnectionPool, PoolConfiguration}
-
 import scala.util.{Failure, Success}
 
 object ColumnInfoActor {
@@ -74,7 +73,7 @@ class ColumnInfoActor (
         log.info("Connected to MySQL server for Metadata!")
 
       case Failure(exception) =>
-        log.error(s"Could not connect to MySQL server for Metadata: ${exception.getMessage}")
+        log.error("Could not connect to MySQL server for Metadata.", exception)
         throw exception
     }
 
@@ -87,12 +86,12 @@ class ColumnInfoActor (
 
   def receive = {
     case event: MutationWithInfo =>
-      log.debug(s"Received mutation event on table ${event.mutation.cacheKey}")
+      log.debug("Received mutation event on table {}.", event.mutation.cacheKey)
 
       columnsInfoCache.get(event.mutation.cacheKey) match {
         case info: Some[ColumnsInfo] =>
-          log.debug(s"Found column info for event on table ${event.mutation.cacheKey}")
-          log.debug(s"Adding column info and forwarding to the ${nextHop.path.name} actor")
+          log.debug("Found column info for event on table {}.", event.mutation.cacheKey)
+          log.debug("Adding column info and forwarding to the {} actor.", nextHop.path.name)
           nextHop ! event.copy(columns = info)
 
         case None =>
@@ -105,16 +104,16 @@ class ColumnInfoActor (
 
           metadataRequestIsPending match {
             case true =>
-              log.debug(s"Couldn't find column info for event on table ${event.mutation.cacheKey} and a metadata request is pending -- buffering")
+              log.debug("Couldn't find column info for event on table {} and a metadata request is pending -- buffering", event.mutation.cacheKey)
             case false =>
-              log.debug(s"Couldn't find column info for event on table ${event.mutation.cacheKey} -- buffering mutation and kicking off a query")
+              log.debug("Couldn't find column info for event on table {} -- buffering mutation and kicking off a query", event.mutation.cacheKey)
               requestColumnInfo(pending.schemaSequence, event.mutation.database, event.mutation.tableName)
           }
 
       }
 
     case columnsInfo: ColumnsInfo =>
-      log.debug(s"Received column info for event on table ${columnsInfo.cacheKey}")
+      log.debug("Received column info for event on table {}", columnsInfo.cacheKey)
 
       columnsInfoCache(columnsInfo.cacheKey) = columnsInfo
 
@@ -125,7 +124,7 @@ class ColumnInfoActor (
         mutationBuffer.put(columnsInfo.cacheKey, stillPending)
 
         if(ready.size > 0) {
-          log.debug(s"Adding column info and forwarding ${ready.size} mutations to the ${nextHop.path.name} actor")
+          log.debug("Adding column info and forwarding {} mutations to the {} actor", ready.size, nextHop.path.name)
           ready.foreach(nextHop ! _.event.copy(columns = Some(columnsInfo)))
         }
       })

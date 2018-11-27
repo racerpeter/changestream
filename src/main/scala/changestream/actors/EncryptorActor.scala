@@ -7,9 +7,9 @@ import javax.crypto.spec.SecretKeySpec
 
 import akka.actor.Actor
 import com.typesafe.config.{Config, ConfigFactory}
+import kamon.Kamon
 import org.slf4j.LoggerFactory
 import spray.json._
-import DefaultJsonProtocol._
 
 object EncryptorActor {
   case class Plaintext(message: JsObject)
@@ -22,6 +22,8 @@ class EncryptorActor (
   import EncryptorActor._
 
   protected val log = LoggerFactory.getLogger(getClass)
+  protected val timingMetric = Kamon.timer("changestream.crypto_time")
+
 
   private val charset = Charset.forName("UTF-8")
   private val decoder = Base64.getDecoder
@@ -42,11 +44,17 @@ class EncryptorActor (
 
   def receive = {
     case Plaintext(message) =>
+      val timer = timingMetric.refine("mode" -> "encrypt").start()
       val result = encryptFields(message)
+      timer.stop()
+
       sender() ! result
 
     case Ciphertext(message) =>
+      val timer = timingMetric.refine("mode" -> "decrypt").start()
       val result = decryptFields(message)
+      timer.stop()
+
       sender() ! result
   }
 

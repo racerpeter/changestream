@@ -5,12 +5,15 @@ import java.util.UUID
 import akka.actor.{ Actor, ActorRef, ActorRefFactory }
 import changestream.events.MutationWithInfo
 
-import collection.mutable
 import changestream.events._
+import kamon.Kamon
 import org.slf4j.LoggerFactory
 
 class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
   protected val log = LoggerFactory.getLogger(getClass)
+  protected val batchSizeMetric = Kamon.histogram("changestream.binlog_event.row_count")
+  protected val transactionSizeMetric = Kamon.histogram("changestream.transaction.row_count")
+
   protected val nextHop = getNextHop(context)
 
   /** Mutable State! */
@@ -20,23 +23,25 @@ class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
 
   def receive = {
     case BeginTransaction =>
-      log.debug(s"Received BeginTransacton")
+      log.debug("Received BeginTransacton")
       mutationCount = 1
       currentGtid = Some(UUID.randomUUID.toString)
       previousMutation = None
 
     case Gtid(guid) =>
-      log.debug(s"Received GTID for transaction: ${guid}")
+      log.debug("Received GTID for transaction: {}", guid)
       currentGtid = Some(guid)
 
     case event: MutationWithInfo =>
-      log.debug(s"Received Mutation for tableId: ${event.mutation.tableId}")
+      log.debug("Received Mutation for tableId: {}", event.mutation.tableId)
+      batchSizeMetric.record(event.mutation.rows.length)
+
       currentGtid match {
         case None =>
           nextHop ! event
         case Some(gtid) =>
           previousMutation.foreach { mutation =>
-            log.debug(s"Adding transaction info and forwarding to the ${nextHop.path.name} actor")
+            log.debug("Adding transaction info and forwarding to the {} actor.", nextHop.path.name)
             nextHop ! mutation
           }
           previousMutation = Some(event.copy(
@@ -49,9 +54,9 @@ class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
       }
 
     case CommitTransaction(position) =>
-      log.debug(s"Received Commit with position ${position}")
+      log.debug("Received Commit with position {}", position)
       previousMutation.foreach { mutation =>
-        log.debug(s"Adding transaction info and forwarding to the ${nextHop.path.name} actor")
+        log.debug("Adding transaction info and forwarding to the {} actor.", nextHop.path.name)
         nextHop ! mutation.copy(
           transaction = mutation.transaction.map { txInfo =>
             txInfo.copy(lastMutationInTransaction = true)
@@ -60,20 +65,24 @@ class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
           nextPosition = mutation.nextPosition.split(":")(0) + ":" + position.toString
         )
       }
+      transactionSizeMetric.record(mutationCount)
       mutationCount = 1
       currentGtid = None
       previousMutation = None
 
     case RollbackTransaction =>
-      log.debug(s"Received Rollback")
+      log.debug("Received Rollback")
+
+      // TODO: this probably doesn't work for mysql configurations that send a rollback event (vs only sending committed events).. consider removing the rollback handling
       previousMutation.foreach { mutation =>
-        log.debug(s"Adding transaction info and forwarding to the ${nextHop.path.name} actor")
+        log.debug("Adding transaction info and forwarding to the {} actor.", nextHop.path.name)
         nextHop ! mutation.copy(
           transaction = mutation.transaction.map { txInfo =>
             txInfo.copy(lastMutationInTransaction = true)
           }
         )
       }
+      transactionSizeMetric.record(mutationCount)
       mutationCount = 1
       currentGtid = None
       previousMutation = None

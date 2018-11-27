@@ -16,12 +16,17 @@ import com.github.shyiko.mysql.binlog.BinaryLogClient.EventListener
 import com.github.shyiko.mysql.binlog.event.EventType._
 import org.slf4j.LoggerFactory
 import com.typesafe.config.Config
+import kamon.Kamon
+import kamon.prometheus.PrometheusReporter
 import spray.can.Http
 
 import scala.concurrent.Future
 
 object ChangeStreamEventListener extends EventListener {
   protected val log = LoggerFactory.getLogger(getClass)
+  protected val counterMetric = Kamon.counter("changestream.binlog_event.total")
+  protected val inFlightMetric = Kamon.rangeSampler("changestream.in_flight")
+
   implicit val system = ActorSystem("changestream") // public for tests
   protected implicit val ec = system.dispatcher
   protected implicit val timeout = Timeout(10 seconds)
@@ -56,20 +61,18 @@ object ChangeStreamEventListener extends EventListener {
     import akka.pattern.gracefulStop
     log.info("Draining event pipeline...")
 
-    val combinedFuture = for {
-      tR <- gracefulStop(transactionActor, 5 seconds)
-      cR <- gracefulStop(columnInfoActor, 5 seconds)
-      fR <- gracefulStop(formatterActor, 5 seconds)
-      eR <- emitter match {
+    for {
+      _ <- gracefulStop(transactionActor, 5 seconds)
+      _ <- gracefulStop(columnInfoActor, 5 seconds)
+      _ <- gracefulStop(formatterActor, 5 seconds)
+      _ <- emitter match {
         case None =>
           Future { Done }
         case Some(actor) =>
           // stop and wait for futures (i.e. external calls) to complete
           gracefulStop(actor, 30 seconds)
       }
-    } yield (tR, cR, fR, eR)
-
-    combinedFuture.map(_ => Done)
+    } yield Done
   }
 
   CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "saveLastPosition") { () =>
@@ -87,7 +90,10 @@ object ChangeStreamEventListener extends EventListener {
   CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceStop, "stopControlServer") { () =>
     log.info("Shutting down control server...")
 
-    IO(Http).ask(Http.CloseAll).map(_ => Done)
+    for{
+      _ <- Kamon.stopAllReporters()
+      _ <- IO(Http).ask(Http.CloseAll)
+    } yield Done
   }
 
   def shutdown() = {
@@ -95,6 +101,8 @@ object ChangeStreamEventListener extends EventListener {
   }
 
   def shutdownAndExit(code: Int) = shutdown().map(_ => sys.exit(code))
+
+  def inFlight = inFlightMetric
 
   /** Allows the configuration for the listener object to be set on startup.
     * The listener will look for whitelist, blacklist, and emitter settings.
@@ -107,11 +115,11 @@ object ChangeStreamEventListener extends EventListener {
 
     if(config.hasPath("whitelist")) {
       config.getString("whitelist").split(',').foreach(whitelist.add(_))
-      log.info(s"Using event whitelist: ${whitelist}")
+      log.info("Using event whitelist: {}", whitelist)
     }
     else if(config.hasPath("blacklist")) {
       config.getString("blacklist").split(',').foreach(blacklist.add(_))
-      log.info(s"Using event blacklist: ${blacklist}")
+      log.info("Using event blacklist: {}", blacklist)
     }
 
     if(config.hasPath("position-saver.actor")) {
@@ -148,10 +156,12 @@ object ChangeStreamEventListener extends EventListener {
 
     IO(Http).ask(controlBind).map {
       case Http.Bound(address) =>
-        log.info(s"Control interface bound to ${address}")
+        log.info("Control interface bound to {}", address)
       case Http.CommandFailed(cmd) =>
-        log.warn(s"Could not bing control interface: ${cmd.failureMessage}")
+        log.warn("Could not bing control interface: {}", cmd.failureMessage)
     }
+
+    Kamon.loadReportersFromConfig()
   }
 
   /** Allows the position saver actor to be configured at runtime.
@@ -196,17 +206,21 @@ object ChangeStreamEventListener extends EventListener {
     * @param binaryLogEvent The binlog event
     */
   def onEvent(binaryLogEvent: Event) = {
-    log.debug(s"Received event: ${binaryLogEvent}")
-    val changeEvent = getChangeEvent(binaryLogEvent)
+    val header = binaryLogEvent.getHeader[EventHeaderV4]
+    counterMetric.refine("event_type" -> header.getEventType.toString).increment()
+
+    log.debug("Received event: {}", binaryLogEvent)
+    val changeEvent = getChangeEvent(binaryLogEvent, header)
 
     changeEvent match {
       case Some(e: TransactionEvent)  => transactionActor ! e
       case Some(e: MutationEvent)     =>
+        ChangeStreamEventListener.inFlight.increment(e.rows.length)
         val nextPosition = getNextPosition
         transactionActor ! MutationWithInfo(e, nextPosition)
       case Some(e: AlterTableEvent)   => columnInfoActor ! e
       case None =>
-        log.debug(s"Ignoring ${binaryLogEvent.getHeader[EventHeaderV4].getEventType} event.")
+        log.debug("Ignoring {} event.", binaryLogEvent.getHeader[EventHeaderV4].getEventType)
     }
   }
 
@@ -226,9 +240,8 @@ object ChangeStreamEventListener extends EventListener {
     * @param event The java binlog listener event
     * @return The resulting ChangeEvent
     */
-  def getChangeEvent(event: Event): Option[ChangeEvent] = {
-    val header = event.getHeader[EventHeaderV4]
-    log.debug(s"Got event of type ${header.getEventType} with ${header.getNextPosition}")
+  def getChangeEvent(event: Event, header: EventHeaderV4): Option[ChangeEvent] = {
+    log.debug("Got event of type {} with {}", header.getEventType, header.getNextPosition)
 
     header.getEventType match {
       case eventType if EventType.isRowMutation(eventType) =>
@@ -253,7 +266,7 @@ object ChangeStreamEventListener extends EventListener {
 
       case FORMAT_DESCRIPTION =>
         val data = event.getData[FormatDescriptionEventData]
-        log.info(s"Server version: ${data.getServerVersion}, binlog version: ${data.getBinlogVersion}")
+        log.info("Server version: {}, binlog version: {}", data.getServerVersion, data.getBinlogVersion)
         None
 
       case ROTATE =>
@@ -361,7 +374,7 @@ object ChangeStreamEventListener extends EventListener {
     }
     catch {
       case e: ClassNotFoundException =>
-        log.error(s"Couldn't load emitter class ${classString} (ClassNotFoundException), using the default emitter.")
+        log.error(s"Couldn't load emitter class ${classString} (ClassNotFoundException), using the default emitter.", e)
         None
     }
   }
