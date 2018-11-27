@@ -161,7 +161,7 @@ object ChangeStreamEventListener extends EventListener {
         log.warn("Could not bing control interface: {}", cmd.failureMessage)
     }
 
-    Kamon.addReporter(new PrometheusReporter())
+    Kamon.loadReportersFromConfig()
   }
 
   /** Allows the position saver actor to be configured at runtime.
