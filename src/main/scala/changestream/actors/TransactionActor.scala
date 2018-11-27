@@ -11,8 +11,8 @@ import org.slf4j.LoggerFactory
 
 class TransactionActor(getNextHop: ActorRefFactory => ActorRef) extends Actor {
   protected val log = LoggerFactory.getLogger(getClass)
-  protected val batchSizeMetric = Kamon.histogram("changestream_binlog_event_row_count")
-  protected val transactionSizeMetric = Kamon.histogram("changestream_transaction_row_count")
+  protected val batchSizeMetric = Kamon.histogram("changestream.binlog_event.row_count")
+  protected val transactionSizeMetric = Kamon.histogram("changestream.transaction.row_count")
 
   protected val nextHop = getNextHop(context)
 

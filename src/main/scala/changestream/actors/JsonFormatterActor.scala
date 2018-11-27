@@ -96,8 +96,8 @@ class JsonFormatterActor (
 
   protected val nextHop = getNextHop(context)
   protected val log = LoggerFactory.getLogger(getClass)
-  protected val jsonSizeMetric = Kamon.histogram("changestream_json_bytes", MeasurementUnit.information.bytes)
-  protected val jsonTimingMetric = Kamon.timer("changestream_json_time")
+  protected val jsonSizeMetric = Kamon.histogram("changestream.json.bytes", MeasurementUnit.information.bytes)
+  protected val jsonTimingMetric = Kamon.timer("changestream.json.time")
 
   protected val includeData = config.getBoolean("include-data")
   protected val prettyPrint = config.getBoolean("pretty-print")

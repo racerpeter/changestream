@@ -32,11 +32,11 @@ class S3Actor(getNextHop: ActorRefFactory => ActorRef,
 
   protected val nextHop = getNextHop(context)
   protected val log = LoggerFactory.getLogger(getClass)
-  protected val successMetric = Kamon.counter("changestream_emitter_total").refine("emitter" -> "s3", "result" -> "success")
-  protected val failureMetric = Kamon.counter("changestream_emitter_total").refine("emitter" -> "s3", "result" -> "failure")
-  protected val fileSizeSuccessMetric = Kamon.histogram("changestream_s3_bytes", MeasurementUnit.information.bytes).refine("result" -> "success")
-  protected val fileSizeFailureMetric = Kamon.histogram("changestream_s3_bytes", MeasurementUnit.information.bytes).refine("result" -> "failure")
-  protected val inFlightMetric = Kamon.rangeSampler("changestream_emitter_in_flight").refine("emitter" -> "s3")
+  protected val successMetric = Kamon.counter("changestream.emitter.total").refine("emitter" -> "s3", "result" -> "success")
+  protected val failureMetric = Kamon.counter("changestream.emitter.total").refine("emitter" -> "s3", "result" -> "failure")
+  protected val fileSizeSuccessMetric = Kamon.histogram("changestream.emitter.s3_bytes", MeasurementUnit.information.bytes).refine("result" -> "success")
+  protected val fileSizeFailureMetric = Kamon.histogram("changestream.emitter.s3_bytes", MeasurementUnit.information.bytes).refine("result" -> "failure")
+  protected val inFlightMetric = Kamon.rangeSampler("changestream.emitter.in_flight").refine("emitter" -> "s3")
 
   protected implicit val ec = context.dispatcher
 

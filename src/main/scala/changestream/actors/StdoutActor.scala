@@ -9,7 +9,7 @@ import kamon.Kamon
 class StdoutActor(getNextHop: ActorRefFactory => ActorRef,
                   config: Config = ConfigFactory.load().getConfig("changestream")) extends Actor {
   protected val nextHop = getNextHop(context)
-  protected val counterMetric = Kamon.counter("changestream_emitter_total").refine("emitter" -> "stdout", "result" -> "success")
+  protected val counterMetric = Kamon.counter("changestream.emitter.total").refine("emitter" -> "stdout", "result" -> "success")
   // TODO: YOU ARE HERE finish instrumenting things
 
   def receive = {

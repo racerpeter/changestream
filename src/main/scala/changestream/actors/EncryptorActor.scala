@@ -22,7 +22,7 @@ class EncryptorActor (
   import EncryptorActor._
 
   protected val log = LoggerFactory.getLogger(getClass)
-  protected val timingMetric = Kamon.timer("changestream_crypto_time")
+  protected val timingMetric = Kamon.timer("changestream.crypto_time")
 
 
   private val charset = Charset.forName("UTF-8")

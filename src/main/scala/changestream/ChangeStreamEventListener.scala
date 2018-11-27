@@ -24,8 +24,8 @@ import scala.concurrent.Future
 
 object ChangeStreamEventListener extends EventListener {
   protected val log = LoggerFactory.getLogger(getClass)
-  protected val counterMetric = Kamon.counter("changestream_binlog_event")
-  protected val inFlightMetric = Kamon.rangeSampler("changestream_in_flight")
+  protected val counterMetric = Kamon.counter("changestream.binlog_event.total")
+  protected val inFlightMetric = Kamon.rangeSampler("changestream.in_flight")
 
   implicit val system = ActorSystem("changestream") // public for tests
   protected implicit val ec = system.dispatcher

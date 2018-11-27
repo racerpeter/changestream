@@ -31,9 +31,9 @@ class SnsActor(getNextHop: ActorRefFactory => ActorRef,
 
   protected val nextHop = getNextHop(context)
   protected val log = LoggerFactory.getLogger(getClass)
-  protected val successMetric = Kamon.counter("changestream_emitter_total").refine("emitter" -> "sns", "result" -> "success")
-  protected val failureMetric = Kamon.counter("changestream_emitter_total").refine("emitter" -> "sns", "result" -> "failure")
-  protected val inFlightMetric = Kamon.rangeSampler("changestream_emitter_in_flight").refine("emitter" -> "sns")
+  protected val successMetric = Kamon.counter("changestream.emitter.total").refine("emitter" -> "sns", "result" -> "success")
+  protected val failureMetric = Kamon.counter("changestream.emitter.total").refine("emitter" -> "sns", "result" -> "failure")
+  protected val inFlightMetric = Kamon.rangeSampler("changestream.emitter.in_flight").refine("emitter" -> "sns")
 
   protected implicit val ec = context.dispatcher
 
