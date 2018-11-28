@@ -114,12 +114,18 @@ object ChangeStreamEventListener extends EventListener {
     blacklist.clear()
 
     if(config.hasPath("whitelist")) {
-      config.getString("whitelist").split(',').foreach(whitelist.add(_))
-      log.info("Using event whitelist: {}", whitelist)
+      config.getString("whitelist").split(',').foreach {
+        case table =>
+          log.info("Adding table to whitelist: {}", table)
+          whitelist.add(table)
+      }
     }
     else if(config.hasPath("blacklist")) {
-      config.getString("blacklist").split(',').foreach(blacklist.add(_))
-      log.info("Using event blacklist: {}", blacklist)
+      config.getString("blacklist").split(',').foreach {
+        case table =>
+          log.info("Adding table to blacklist: {}", table)
+          blacklist.add(table)
+      }
     }
 
     if(config.hasPath("position-saver.actor")) {
