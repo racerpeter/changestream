@@ -272,13 +272,11 @@ class ChangeStreamISpec extends Database with Config {
       queryAndWait(INSERT)
 
       val overridePosition = getLiveBinLogPosition
-      System.setProperty("OVERRIDE_POSITION", overridePosition)
-      ConfigFactory.invalidateCaches()
 
       // this event should arrive first
       queryAndWait(UPDATE)
 
-      ChangeStream.getConnectedAndWait
+      ChangeStream.getConnectedAndWait(Some(overridePosition))
       ensureConnected
 
       // advance the live position to be "newer" than the override (should arrive second)
@@ -286,9 +284,6 @@ class ChangeStreamISpec extends Database with Config {
 
       expectMutation.mutation shouldBe a[Update]
       expectMutation.mutation shouldBe a[Delete]
-
-      System.setProperty("OVERRIDE_POSITION", "")
-      ConfigFactory.invalidateCaches()
     }
 
     "exit gracefully when a TERM signal is received" in {

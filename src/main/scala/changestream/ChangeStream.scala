@@ -17,6 +17,10 @@ object ChangeStream extends App {
   protected val config = ConfigFactory.load().getConfig("changestream")
   protected val mysqlHost = config.getString("mysql.host")
   protected val mysqlPort = config.getInt("mysql.port")
+  protected val overridePosition = System.getenv("OVERRIDE_POSITION") match {
+    case position:String if position != null => Some(position) //scalastyle:ignore
+    case _ => None
+  }
   protected val client = new BinaryLogClient(
     mysqlHost,
     mysqlPort,
@@ -41,26 +45,22 @@ object ChangeStream extends App {
   client.setEventDeserializer(ChangeStreamEventDeserializer)
   client.registerLifecycleListener(ChangeStreamLifecycleListener)
 
-
-  getConnected
+  getConnected(overridePosition)
 
   def serverName = s"${mysqlHost}:${mysqlPort}"
   def clientId = client.getServerId
   def isConnected = client.isConnected
 
-  def getConnectedAndWait = Await.result(getConnected, 60.seconds)
+  def getConnectedAndWait(startingPosition: Option[String]) = Await.result(getConnected(startingPosition), 60.seconds)
   def disconnectClient = client.disconnect()
 
-  def getConnected = {
+  def getConnected(startingPosition: Option[String]) = {
     log.info("Starting changestream...")
 
-    val overridePosition = System.getProperty("OVERRIDE_POSITION")
-    System.setProperty("OVERRIDE_POSITION", "") // clear override after initial boot
-
-    val getPositionFuture = overridePosition match {
-      case overridePosition:String if overridePosition.length > 0 =>
+    val getPositionFuture = startingPosition match {
+      case Some(_) =>
         log.info("Overriding starting binlog position with OVERRIDE_POSITION={}", overridePosition)
-        ChangeStreamEventListener.setPosition(Some(overridePosition))
+        ChangeStreamEventListener.setPosition(startingPosition)
       case _ =>
         ChangeStreamEventListener.getStoredPosition
     }
