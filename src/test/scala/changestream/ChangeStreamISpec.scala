@@ -241,7 +241,7 @@ class ChangeStreamISpec extends Database with Config {
 
       queryAndWait(INSERT)
 
-      ChangeStream.getConnectedAndWait
+      ChangeStream.getConnectedAndWait(None)
       ensureConnected
 
       queryAndWait(UPDATE)
@@ -255,7 +255,7 @@ class ChangeStreamISpec extends Database with Config {
 
       queryAndWait(INSERT)
 
-      ChangeStream.getConnectedAndWait
+      ChangeStream.getConnectedAndWait(None)
       ensureConnected
 
       queryAndWait(UPDATE)
@@ -292,7 +292,7 @@ class ChangeStreamISpec extends Database with Config {
 
       val startingPosition = getStoredBinLogPosition
 
-      ChangeStream.getConnectedAndWait
+      ChangeStream.getConnectedAndWait(None)
       ensureConnected
 
       queryAndWait(INSERT) // should not persist immediately because of the max events = 2
@@ -310,7 +310,7 @@ class ChangeStreamISpec extends Database with Config {
 
       queryAndWait(UPDATE) // should not immediately persist
 
-      ChangeStream.getConnectedAndWait
+      ChangeStream.getConnectedAndWait(None)
       ensureConnected
 
       queryAndWait(DELETE) // should persist because it is the second event processed by the saver
