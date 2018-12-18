@@ -1,6 +1,13 @@
 # Changestream Changelog
 
 
+## 0.4.0 (2018-12-18)
+
+- Added Kamon's stats collector to capture detailed stats on Changestream operations, including changes per table, change size, timing information, and messages in flight.
+- Automatically re-connect binlog client after `TimeoutException`, where previously only `IOException` was retried.
+- Log whitelist and blacklist configurations on multiple lines during startup to avoid triggering OSSEC's log length monitor.
+
+
 ## 0.3.1 (2018-08-06)
 
 - Fixed regression in SQL string length limiting
