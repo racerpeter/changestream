@@ -5,7 +5,6 @@ import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, CoordinatedShu
 import akka.io.IO
 import akka.pattern.ask
 import akka.util.Timeout
-import changestream.ChangeStream.config
 import changestream.actors.PositionSaver._
 import changestream.actors._
 import changestream.events._
@@ -16,7 +15,7 @@ import com.github.shyiko.mysql.binlog.event._
 import com.github.shyiko.mysql.binlog.BinaryLogClient.EventListener
 import com.github.shyiko.mysql.binlog.event.EventType._
 import org.slf4j.LoggerFactory
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.Config
 import kamon.Kamon
 import spray.can.Http
 
@@ -31,13 +30,11 @@ object ChangeStreamEventListener extends EventListener {
   protected implicit val ec = system.dispatcher
   protected implicit val timeout = Timeout(10 seconds)
 
-  protected val config = ConfigFactory.load().getConfig("changestream")
-  protected val inFlightLimit = config.getInt("in-flight-limit")
-
   protected val systemDatabases = Seq("information_schema", "mysql", "performance_schema", "sys")
   protected val whitelist: java.util.List[String] = new java.util.LinkedList[String]()
   protected val blacklist: java.util.List[String] = new java.util.LinkedList[String]()
 
+  @volatile protected var inFlightLimit: Option[Int] = None
   @volatile protected var positionSaver: Option[ActorRef] = None
   @volatile protected var emitter: Option[ActorRef] = None
   @volatile protected var currentBinlogFile: Option[String] = None
@@ -151,6 +148,14 @@ object ChangeStreamEventListener extends EventListener {
       emitter = emitter match {
         case None => Some(system.actorOf(Props(new StdoutActor(_ => positionSaver.get)), name = "emitterActor"))
         case _ => emitter
+      }
+    }
+
+    if(config.hasPath("in-flight-limit")) {
+      inFlightLimit = config.getInt("in-flight-limit") match {
+        case limit if limit > 0 =>
+          Some(limit)
+        case _ => None
       }
     }
   }
