@@ -9,10 +9,13 @@ import changestream.helpers.{Base, Config}
 import com.github.shyiko.mysql.binlog.event.EventType._
 import com.github.shyiko.mysql.binlog.event._
 import com.typesafe.config.ConfigFactory
+import org.scalatest.concurrent.Eventually
+import org.scalatest.time.{Seconds, Span}
 
+import scala.concurrent.Await
 import scala.reflect.ClassTag
 
-class ChangeStreamEventListenerSpec extends Base with Config {
+class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
   def getTypedEvent[T: ClassTag](event: Event): Option[T] = ChangeStreamEventListener.getChangeEvent(event, event.getHeader[EventHeaderV4]) match {
     case Some(e: T) => Some(e)
     case _ => None
@@ -153,6 +156,44 @@ class ChangeStreamEventListenerSpec extends Base with Config {
       ChangeStreamEventListener.onEvent(xid)
 
       ChangeStreamEventListener.getNextPosition should be("foo:4")
+    }
+  }
+
+  "When limiting in flight messages" should {
+    header.setEventType(WRITE_ROWS)
+    header.setNextPosition(2)
+    val data = new WriteRowsEventData()
+    data.setRows(List(Array("123")))
+    val write_rows = new Event(header, data)
+
+    "do not limit when the setting is 0" in {
+      val emitterConfig = ConfigFactory
+        .parseString("changestream.in-flight-limit = 0")
+        .withFallback(testConfig)
+        .getConfig("changestream")
+      ChangeStreamEventListener.setConfig(emitterConfig)
+
+      eventually (timeout(Span(5, Seconds))) {
+        ChangeStreamEventListener.onEvent(write_rows)
+        ChangeStreamEventListener.onEvent(write_rows)
+        "finished" should be ("finished")
+      }
+    }
+
+    "limit messages in flight when the setting is greater than 0" in {
+      val emitterConfig = ConfigFactory
+        .parseString("changestream.in-flight-limit = 0")
+        .withFallback(testConfig)
+        .getConfig("changestream")
+      ChangeStreamEventListener.setConfig(emitterConfig)
+
+      //todo
+      // Create the app thread
+      val eventThread = new Thread {
+        override def run = {
+          ChangeStreamEventListener.onEvent(write_rows)
+        }
+      }
     }
   }
 

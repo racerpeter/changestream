@@ -5,6 +5,7 @@ import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, CoordinatedShu
 import akka.io.IO
 import akka.pattern.ask
 import akka.util.Timeout
+import changestream.ChangeStream.config
 import changestream.actors.PositionSaver._
 import changestream.actors._
 import changestream.events._
@@ -15,9 +16,8 @@ import com.github.shyiko.mysql.binlog.event._
 import com.github.shyiko.mysql.binlog.BinaryLogClient.EventListener
 import com.github.shyiko.mysql.binlog.event.EventType._
 import org.slf4j.LoggerFactory
-import com.typesafe.config.Config
+import com.typesafe.config.{Config, ConfigFactory}
 import kamon.Kamon
-import kamon.prometheus.PrometheusReporter
 import spray.can.Http
 
 import scala.concurrent.Future
@@ -30,6 +30,9 @@ object ChangeStreamEventListener extends EventListener {
   implicit val system = ActorSystem("changestream") // public for tests
   protected implicit val ec = system.dispatcher
   protected implicit val timeout = Timeout(10 seconds)
+
+  protected val config = ConfigFactory.load().getConfig("changestream")
+  protected val inFlightLimit = config.getInt("in-flight-limit")
 
   protected val systemDatabases = Seq("information_schema", "mysql", "performance_schema", "sys")
   protected val whitelist: java.util.List[String] = new java.util.LinkedList[String]()
