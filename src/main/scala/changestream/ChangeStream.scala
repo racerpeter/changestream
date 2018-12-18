@@ -51,10 +51,10 @@ object ChangeStream extends App {
   def clientId = client.getServerId
   def isConnected = client.isConnected
 
-  def getConnectedAndWait(startingPosition: Option[String]) = Await.result(getConnected(startingPosition), 60.seconds)
+  def getConnectedAndWait(startingPosition: Option[String] = None) = Await.result(getConnected(startingPosition), 60.seconds)
   def disconnectClient = client.disconnect()
 
-  def getConnected(startingPosition: Option[String]) = {
+  def getConnected(startingPosition: Option[String] = None) = {
     log.info("Starting changestream...")
 
     val getPositionFuture = startingPosition match {
