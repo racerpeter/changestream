@@ -1,5 +1,7 @@
 package changestream
 
+import java.util.concurrent.atomic.AtomicLong
+
 import akka.Done
 import akka.actor.{Actor, ActorRef, ActorRefFactory, ActorSystem, CoordinatedShutdown, Props}
 import akka.io.IO
@@ -34,7 +36,8 @@ object ChangeStreamEventListener extends EventListener {
   protected val whitelist: java.util.List[String] = new java.util.LinkedList[String]()
   protected val blacklist: java.util.List[String] = new java.util.LinkedList[String]()
 
-  @volatile protected var inFlightLimit: Option[Int] = None
+  @volatile protected var inFlightLimit: Option[Long] = None
+  @volatile protected var inFlightCount: AtomicLong = new AtomicLong(0)
   @volatile protected var positionSaver: Option[ActorRef] = None
   @volatile protected var emitter: Option[ActorRef] = None
   @volatile protected var currentBinlogFile: Option[String] = None
@@ -102,7 +105,15 @@ object ChangeStreamEventListener extends EventListener {
 
   def shutdownAndExit(code: Int) = shutdown().map(_ => sys.exit(code))
 
-  def inFlight = inFlightMetric
+  def inFlightIncrement(count: Long) = {
+    inFlightMetric.increment(count)
+    inFlightCount.addAndGet(count)
+  }
+
+  def inFlightDecrement(count: Long) = {
+    inFlightMetric.decrement(count)
+    inFlightCount.addAndGet(-1 * count)
+  }
 
   /** Allows the configuration for the listener object to be set on startup.
     * The listener will look for whitelist, blacklist, and emitter settings.
@@ -152,7 +163,7 @@ object ChangeStreamEventListener extends EventListener {
     }
 
     if(config.hasPath("in-flight-limit")) {
-      inFlightLimit = config.getInt("in-flight-limit") match {
+      inFlightLimit = config.getLong("in-flight-limit") match {
         case limit if limit > 0 =>
           Some(limit)
         case _ => None
@@ -229,13 +240,15 @@ object ChangeStreamEventListener extends EventListener {
     changeEvent match {
       case Some(e: TransactionEvent)  => transactionActor ! e
       case Some(e: MutationEvent)     =>
-        ChangeStreamEventListener.inFlight.increment(e.rows.length)
+        ChangeStreamEventListener.inFlightIncrement(e.rows.length)
         val nextPosition = getNextPosition
         transactionActor ! MutationWithInfo(e, nextPosition)
       case Some(e: AlterTableEvent)   => columnInfoActor ! e
       case None =>
         log.debug("Ignoring {} event.", binaryLogEvent.getHeader[EventHeaderV4].getEventType)
     }
+
+    blockIfAboveInFlightLimit
   }
 
   def getNextPosition: String = {
@@ -378,6 +391,17 @@ object ChangeStreamEventListener extends EventListener {
     case '`' => escaped.substring(1, escaped.length - 1).replace("``", "`")
     case '"' => escaped.substring(1, escaped.length - 1).replace("\"\"", "\"")
     case _ => escaped
+  }
+
+  private def blockIfAboveInFlightLimit = {
+    inFlightLimit.foreach {
+      case limit:Long =>
+        val currentInFlight = inFlightCount.get()
+        if(currentInFlight > limit) {
+          log.debug("Hit in flight limit (? in flight / ? limit).", currentInFlight, limit)
+          Thread.sleep(100)
+        }
+    }
   }
 
   private def createActor(classString: String, actorName: String, args: Object*):Option[ActorRef] = {
