@@ -18,7 +18,7 @@ object ChangeStream extends App {
   protected val mysqlHost = config.getString("mysql.host")
   protected val mysqlPort = config.getInt("mysql.port")
   protected val overridePosition = System.getenv("OVERRIDE_POSITION") match {
-    case position:String if position != null => Some(position) //scalastyle:ignore
+    case position:String if (position != null && position.length > 0) => Some(position) //scalastyle:ignore
     case _ => None
   }
   protected val client = new BinaryLogClient(
