@@ -37,6 +37,7 @@ object ChangeStreamEventListener extends EventListener {
   protected val blacklist: java.util.List[String] = new java.util.LinkedList[String]()
 
   @volatile protected var inFlightLimit: Option[Long] = None
+  @volatile protected var inFlightLimitSleepTime: Long = 100
   @volatile protected var inFlightCount: AtomicLong = new AtomicLong(0)
   @volatile protected var positionSaver: Option[ActorRef] = None
   @volatile protected var emitter: Option[ActorRef] = None
@@ -115,6 +116,10 @@ object ChangeStreamEventListener extends EventListener {
     inFlightCount.addAndGet(-1 * count)
   }
 
+  def inFlightReset = {
+    inFlightCount.set(0)
+  }
+
   /** Allows the configuration for the listener object to be set on startup.
     * The listener will look for whitelist, blacklist, and emitter settings.
     *
@@ -167,6 +172,13 @@ object ChangeStreamEventListener extends EventListener {
         case limit if limit > 0 =>
           Some(limit)
         case _ => None
+      }
+    }
+
+    if(config.hasPath("in-flight-limit-sleep-time")) {
+      val sleepTime = config.getLong("in-flight-limit-sleep-time")
+      if(sleepTime > 0) {
+        inFlightLimitSleepTime = sleepTime
       }
     }
   }
@@ -253,12 +265,20 @@ object ChangeStreamEventListener extends EventListener {
 
   def getNextPosition: String = {
     // TODO make position a case class so we can use position.copy(position = 123) notation
-    val safePosition = currentTransactionPosition.getOrElse(currentRowsQueryPosition.getOrElse(currentTableMapPosition.get))
+    val safePosition = currentTransactionPosition.getOrElse(
+      currentRowsQueryPosition.getOrElse(
+        currentTableMapPosition.get
+      )
+    )
     s"${currentBinlogFile.get}:${safePosition.toString}"
   }
 
   def getCurrentPosition = {
-    val safePosition = currentTransactionPosition.getOrElse(currentRowsQueryPosition.getOrElse(currentTableMapPosition.getOrElse(0L)))
+    val safePosition = currentTransactionPosition.getOrElse(
+      currentRowsQueryPosition.getOrElse(
+        currentTableMapPosition.getOrElse(0L)
+      )
+    )
     s"${currentBinlogFile.getOrElse("<not started>")}:${safePosition.toString}"
   }
 
@@ -398,8 +418,8 @@ object ChangeStreamEventListener extends EventListener {
       case limit:Long =>
         val currentInFlight = inFlightCount.get()
         if(currentInFlight > limit) {
-          log.debug("Hit in flight limit (? in flight / ? limit).", currentInFlight, limit)
-          Thread.sleep(100)
+          log.debug(s"Hit in flight limit (${currentInFlight} in flight / ${limit} limit).")
+          Thread.sleep(inFlightLimitSleepTime)
         }
     }
   }

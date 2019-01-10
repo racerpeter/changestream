@@ -2,44 +2,43 @@ package changestream
 
 import java.util
 
-import akka.actor.ActorRefFactory
 import akka.testkit.TestProbe
 import changestream.events._
 import changestream.helpers.{Base, Config}
 import com.github.shyiko.mysql.binlog.event.EventType._
 import com.github.shyiko.mysql.binlog.event._
 import com.typesafe.config.ConfigFactory
-import org.scalatest.concurrent.Eventually
-import org.scalatest.time.{Seconds, Span}
+import org.scalatest.concurrent.TimeLimits
 
-import scala.concurrent.Await
 import scala.reflect.ClassTag
+import org.scalatest.time.SpanSugar._
 
-class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
+class ChangeStreamEventListenerSpec extends Base with Config with TimeLimits {
   def getTypedEvent[T: ClassTag](event: Event): Option[T] = ChangeStreamEventListener.getChangeEvent(event, event.getHeader[EventHeaderV4]) match {
     case Some(e: T) => Some(e)
     case _ => None
   }
-
-  val header = new EventHeaderV4()
 
   val probe = TestProbe()
   ChangeStreamEventListener.setEmitter(probe.ref)
 
   "ChangeStreamEventListener" should {
     "Should not crash when receiving a ROTATE event" in {
+      val header = new EventHeaderV4()
       header.setEventType(EventType.ROTATE)
       val rotate = new Event(header, new RotateEventData())
 
       ChangeStreamEventListener.onEvent(rotate)
     }
     "Should not crash when receiving a STOP event" in {
+      val header = new EventHeaderV4()
       header.setEventType(EventType.STOP)
       val stop = new Event(header, null)
 
       ChangeStreamEventListener.onEvent(stop)
     }
     "Should not crash when receiving a FORMAT_DESCRIPTION event" in {
+      val header = new EventHeaderV4()
       header.setEventType(EventType.FORMAT_DESCRIPTION)
       val rotate = new Event(header, new FormatDescriptionEventData())
 
@@ -60,6 +59,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
 
   "When keeping track of safe positions" should {
     "treat begin transaction as safe when begin transaction is present" in {
+      val header = new EventHeaderV4()
       header.setEventType(ROTATE)
       header.setNextPosition(1)
       val rotateData = new RotateEventData()
@@ -90,6 +90,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
     }
 
     "treat rows query as safe when rows query is present" in {
+      val header = new EventHeaderV4()
       header.setEventType(ROTATE)
       header.setNextPosition(1)
       val rotateData = new RotateEventData()
@@ -113,6 +114,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
     }
 
     "treat table map as safe when rows query is not present" in {
+      val header = new EventHeaderV4()
       header.setEventType(ROTATE)
       header.setNextPosition(1)
       val rotateData = new RotateEventData()
@@ -131,6 +133,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
     }
 
     "rows query and table map positions are replaced with XID nextPosition after XID event is received" in {
+      val header = new EventHeaderV4()
       header.setEventType(ROTATE)
       header.setNextPosition(1)
       val rotateData = new RotateEventData()
@@ -160,45 +163,72 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
   }
 
   "When limiting in flight messages" should {
+    ChangeStreamEventListener.inFlightReset
+
+    val rotateHeader = new EventHeaderV4()
+    rotateHeader.setEventType(ROTATE)
+    rotateHeader.setNextPosition(1)
+    val rotateData = new RotateEventData()
+    rotateData.setBinlogFilename("foo")
+    rotateData.setBinlogPosition(1)
+    val rotate = new Event(rotateHeader, rotateData)
+
+    val rowsQueryHeader = new EventHeaderV4()
+    rowsQueryHeader.setEventType(ROWS_QUERY)
+    rowsQueryHeader.setNextPosition(2)
+    val rowsQueryData = new IntVarEventData()
+    val rowsQuery = new Event(rowsQueryHeader, rowsQueryData)
+
+    val header = new EventHeaderV4()
     header.setEventType(WRITE_ROWS)
     header.setNextPosition(2)
-    val data = new WriteRowsEventData()
-    data.setRows(List(Array("123")))
-    val write_rows = new Event(header, data)
+    val data = Insert(123, new util.BitSet(3), List(Array[java.io.Serializable]("123")))
+    val writeRows = new Event(header, data)
 
     "do not limit when the setting is 0" in {
       val emitterConfig = ConfigFactory
-        .parseString("changestream.in-flight-limit = 0")
+        .parseString("changestream.in-flight-limit = 0\nchangestream.in-flight-limit-sleep-time = 4000")
         .withFallback(testConfig)
         .getConfig("changestream")
       ChangeStreamEventListener.setConfig(emitterConfig)
 
-      eventually (timeout(Span(5, Seconds))) {
-        ChangeStreamEventListener.onEvent(write_rows)
-        ChangeStreamEventListener.onEvent(write_rows)
-        "finished" should be ("finished")
+      ChangeStreamEventListener.onEvent(rotate)
+      ChangeStreamEventListener.onEvent(rowsQuery)
+
+      failAfter(2 seconds) {
+        ChangeStreamEventListener.onEvent(writeRows)
+        ChangeStreamEventListener.onEvent(writeRows)
       }
+
+      ChangeStreamEventListener.inFlightReset
     }
 
     "limit messages in flight when the setting is greater than 0" in {
       val emitterConfig = ConfigFactory
-        .parseString("changestream.in-flight-limit = 0")
+        .parseString("changestream.in-flight-limit = 1\nchangestream.in-flight-limit-sleep-time = 4000")
         .withFallback(testConfig)
         .getConfig("changestream")
       ChangeStreamEventListener.setConfig(emitterConfig)
 
-      //todo
-      // Create the app thread
-      val eventThread = new Thread {
-        override def run = {
-          ChangeStreamEventListener.onEvent(write_rows)
-        }
+      ChangeStreamEventListener.onEvent(rotate)
+      ChangeStreamEventListener.onEvent(rowsQuery)
+
+      var wroteTwoMessages = false
+      cancelAfter(2 seconds) {
+        ChangeStreamEventListener.onEvent(writeRows)
+        ChangeStreamEventListener.onEvent(writeRows)
+        wroteTwoMessages = true
       }
+
+      s"Wrote two messages? ${wroteTwoMessages}" should be("Wrote two messages? false")
+
+      ChangeStreamEventListener.inFlightReset
     }
   }
 
   "When receiving an invalid event" should {
     "Throw an exception" in {
+      val header = new EventHeaderV4()
       header.setEventType(CREATE_FILE)
       val data = new IntVarEventData()
       val event = new Event(header, data)
@@ -211,6 +241,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
 
   "When receiving a mutation event" should {
     "Properly increment the sequence number" in {
+      val header = new EventHeaderV4()
       header.setEventType(WRITE_ROWS)
 
       val tableId = 123
@@ -225,6 +256,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
     }
 
     "Properly increment the sequence number when there are many rows in the mutation" in {
+      val header = new EventHeaderV4()
       header.setEventType(WRITE_ROWS)
 
       val tableId = 123
@@ -243,6 +275,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
 
   "When receiving an insert mutation event" should {
     "Emit a MutationEvent(Insert(...)..)" in {
+      val header = new EventHeaderV4()
       header.setEventType(WRITE_ROWS)
 
       val tableId = 123
@@ -260,6 +293,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
 
   "When receiving an update mutation event" should {
     "Emit a MutationEvent(Update(...)..)" in {
+      val header = new EventHeaderV4()
       header.setEventType(UPDATE_ROWS)
 
       val tableId = 123
@@ -277,6 +311,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
 
   "When receiving an delete mutation event" should {
     "Emit a MutationEvent(Delete(...)..)" in {
+      val header = new EventHeaderV4()
       header.setEventType(DELETE_ROWS)
 
       val tableId = 123
@@ -301,6 +336,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
 
       ChangeStreamEventListener.setConfig(whitelistConfig)
 
+      val header = new EventHeaderV4()
       header.setEventType(WRITE_ROWS)
 
       val tableId = 123
@@ -319,6 +355,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
 
       ChangeStreamEventListener.setConfig(blacklistConfig)
 
+      val header = new EventHeaderV4()
       header.setEventType(WRITE_ROWS)
 
       val tableId = 123
@@ -331,6 +368,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
 
     "and exclude special databases" in {
       Seq("information_schema", "mysql", "performance_schema", "sys").foreach({ invalidDb =>
+        val header = new EventHeaderV4()
         header.setEventType(WRITE_ROWS)
         val tableId = 123
         val data = Insert(tableId, new util.BitSet(3), List[Array[java.io.Serializable]](),
@@ -344,6 +382,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
 
   "When receiving a XID event" should {
     "Emit a TransactionEvent(CommitTransaction..)" in {
+      val header = new EventHeaderV4()
       header.setEventType(XID)
       header.setNextPosition(42)
       val data = new XidEventData()
@@ -357,6 +396,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
 
   "When receiving a QUERY event for Transaction" should {
     "Emit a TransactionEvent(BeginTransaction..) for BEGIN query" in {
+      val header = new EventHeaderV4()
       header.setEventType(QUERY)
       val data = new QueryEventData()
       data.setSql("BEGIN")
@@ -365,6 +405,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
       getTypedEvent[TransactionEvent](event) should be(Some(BeginTransaction))
     }
     "Emit a TransactionEvent(CommitTransaction..) for COMMIT query" in {
+      val header = new EventHeaderV4()
       header.setEventType(QUERY)
       header.setNextPosition(42)
       val data = new QueryEventData()
@@ -374,6 +415,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
       getTypedEvent[TransactionEvent](event) should be(Some(CommitTransaction(42)))
     }
     "Emit a TransactionEvent(RollbackTransaction..) for ROLLBACK query" in {
+      val header = new EventHeaderV4()
       header.setEventType(QUERY)
       val data = new QueryEventData()
       data.setSql("ROLLBACK")
@@ -384,6 +426,7 @@ class ChangeStreamEventListenerSpec extends Base with Config with Eventually {
   }
 
   "When receiving a QUERY event for ALTER and emitting AlterTableEvent" should {
+    val header = new EventHeaderV4()
     header.setEventType(QUERY)
     val data = new QueryEventData()
 
