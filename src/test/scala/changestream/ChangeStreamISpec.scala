@@ -241,7 +241,7 @@ class ChangeStreamISpec extends Database with Config {
 
       queryAndWait(INSERT)
 
-      ChangeStream.getConnectedAndWait
+      ChangeStream.getConnectedAndWait(None)
       ensureConnected
 
       queryAndWait(UPDATE)
@@ -255,7 +255,7 @@ class ChangeStreamISpec extends Database with Config {
 
       queryAndWait(INSERT)
 
-      ChangeStream.getConnectedAndWait
+      ChangeStream.getConnectedAndWait(None)
       ensureConnected
 
       queryAndWait(UPDATE)
@@ -272,13 +272,11 @@ class ChangeStreamISpec extends Database with Config {
       queryAndWait(INSERT)
 
       val overridePosition = getLiveBinLogPosition
-      System.setProperty("OVERRIDE_POSITION", overridePosition)
-      ConfigFactory.invalidateCaches()
 
       // this event should arrive first
       queryAndWait(UPDATE)
 
-      ChangeStream.getConnectedAndWait
+      ChangeStream.getConnectedAndWait(Some(overridePosition))
       ensureConnected
 
       // advance the live position to be "newer" than the override (should arrive second)
@@ -286,9 +284,6 @@ class ChangeStreamISpec extends Database with Config {
 
       expectMutation.mutation shouldBe a[Update]
       expectMutation.mutation shouldBe a[Delete]
-
-      System.setProperty("OVERRIDE_POSITION", "")
-      ConfigFactory.invalidateCaches()
     }
 
     "exit gracefully when a TERM signal is received" in {
@@ -297,7 +292,7 @@ class ChangeStreamISpec extends Database with Config {
 
       val startingPosition = getStoredBinLogPosition
 
-      ChangeStream.getConnectedAndWait
+      ChangeStream.getConnectedAndWait(None)
       ensureConnected
 
       queryAndWait(INSERT) // should not persist immediately because of the max events = 2
@@ -315,7 +310,7 @@ class ChangeStreamISpec extends Database with Config {
 
       queryAndWait(UPDATE) // should not immediately persist
 
-      ChangeStream.getConnectedAndWait
+      ChangeStream.getConnectedAndWait(None)
       ensureConnected
 
       queryAndWait(DELETE) // should persist because it is the second event processed by the saver
