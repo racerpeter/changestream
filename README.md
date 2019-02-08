@@ -20,7 +20,7 @@ Currently, [Amazon Simple Queuing Service (SQS)](https://aws.amazon.com/sqs/), [
 
 ## Documentation
 
-- [Why SNS+SQS?](docs/why-sns+sqs.md)
+- [Why SNS+SQS?]sdf (docs/why-sns+sqs.md)
 - [How Do I Consume My Events?](docs/how-do-i-consume-my-events.md)
 - [The Stack](docs/the-stack.md)
 - [Architecture](docs/architecture.md)
